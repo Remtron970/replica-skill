@@ -11,6 +11,12 @@ copies how a chat assistant works, but not anyone's code, branding or text.
 ## Features
 
 - Chat with streamed answers, rendered as Markdown, with code blocks and a copy button
+- **Attach photos and files** with the 📎 button, drag and drop, or paste. It reads text,
+  code, CSV, JSON and PDF files. Photos switch to the Phi 3.5 Vision model on
+  computers, or go to a vision model in Ollama
+- **Fast start:** the model loads in the background while you type (and right away on
+  later visits). It runs off the main thread so the screen stays smooth, and long chats
+  are trimmed to what the model can read
 - Stop a response, regenerate the last answer, edit and resend your message
 - A chat history sidebar grouped by date, with search, rename and delete
 - Choice of 8 open-source models, from tiny (0.3 GB) to smarter (2 GB)
@@ -81,8 +87,17 @@ with `OLLAMA_ORIGINS=https://your-site.example ollama serve`.
 
 ## Image and video generation
 
-Chat stays free and runs on your device. The **Create** tab uses paid cloud
-models, which no phone can run, so it needs your own [fal.ai](https://fal.ai) API key:
+Two image models in the **Create** tab are **free with no key**:
+
+- **FLUX (free)** by [Pollinations](https://pollinations.ai): a free cloud service.
+  It allows about one image every 15 seconds without an account; the app waits
+  automatically.
+- **Janus-Pro 1B (free, on device)** by DeepSeek: runs on your own device with
+  WebGPU via Transformers.js, so it's private and works offline after a one-time
+  ~1.5 GB download. It's best on a computer. Images are small (384×384) and simpler
+  than the cloud models.
+
+The top paid models need your own [fal.ai](https://fal.ai) API key:
 
 1. Make an account at fal.ai, add some credit, and create a key at
    <https://fal.ai/dashboard/keys>.
@@ -115,11 +130,15 @@ creations you want to keep.
 index.html   layout
 styles.css   design tokens (light and dark) and components
 app.js       storage, accounts, engines (WebLLM, Ollama), streaming, UI, install button
-create.js    Create tab: fal.ai queue client, model list, gallery, viewer
+create.js    Create tab: fal.ai queue client, free models, gallery, viewer
+attachments.js  reading attached photos, text files and PDFs
+idb.js       on-device storage for photos and generated images (IndexedDB)
+llm-worker.js    runs the chat model in a background thread
+image-worker.js  free on-device image model (Janus-Pro) in a background thread
 manifest.webmanifest   app name, icons, colours, shortcut
 sw.js        service worker: offline app shell + cached engine script
 icons/       app icon (SVG source + PNGs, including maskable and Apple touch)
-vendor/      marked (Markdown) and DOMPurify (HTML sanitizer), MIT and Apache-2.0
+vendor/      marked (Markdown), DOMPurify (HTML sanitizer) and pdf.js (PDF text), MIT and Apache-2.0
 ```
 
 ## Honest limits

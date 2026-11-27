@@ -2,7 +2,10 @@
 // reached through fal.ai with the person's own API key (stored on this device only).
 // Docs used: fal queue API (submit -> poll status_url -> fetch response_url, header "Authorization: Key <key>").
 
+import { files as fileStore, blobUrl } from "./idb.js";
+
 const QUEUE = "https://queue.fal.run/";
+const POLL_DIMS = { "1:1": [1024, 1024], "16:9": [1344, 768], "9:16": [768, 1344], "4:3": [1152, 864], "3:4": [864, 1152] };
 
 // Leading models as of November 2026 (LMArena / Artificial Analysis boards).
 // Prices are rough estimates from public listings; fal.ai's model pages are the source of truth.
@@ -10,6 +13,16 @@ const GPT_SIZES = { "1:1": "square_hd", "16:9": "landscape_16_9", "9:16": "portr
 
 export const MODELS = {
   image: [
+    {
+      key: "free-flux", provider: "pollinations", free: true, name: "FLUX (free)", by: "Pollinations",
+      badge: "Free, no key needed. Cloud service, about 1 image every 15 seconds.",
+      aspects: ["1:1", "16:9", "9:16", "4:3", "3:4"], maxCount: 1, perImage: 0,
+    },
+    {
+      key: "free-device", provider: "local", free: true, name: "Janus-Pro 1B (free, on device)", by: "DeepSeek",
+      badge: "Free and private: made on your own device. Best on a computer; first use downloads ~1.5 GB.",
+      aspects: null, maxCount: 1, perImage: 0, endpoint: "onnx-community/Janus-Pro-1B-ONNX",
+    },
     {
       key: "gpt-image-2", name: "GPT Image 2", by: "OpenAI", badge: "Top of the leaderboards",
       endpoint: "openai/gpt-image-2", editEndpoint: "openai/gpt-image-2/edit",
@@ -135,6 +148,62 @@ async function fileToDataUrl(file, max = 1536) {
   return c.toDataURL("image/jpeg", 0.9);
 }
 
+// ---------- free providers ----------
+let lastPoll = 0;
+async function pollinations(prompt, aspect, onWait) {
+  const wait = 15500 - (Date.now() - lastPoll); // anonymous use allows about one image every 15 seconds
+  if (wait > 0) { onWait?.(Math.ceil(wait / 1000)); await sleep(wait); }
+  lastPoll = Date.now();
+  const [w, h] = POLL_DIMS[aspect] || [1024, 1024];
+  const seed = Math.floor(Math.random() * 1e9);
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 180000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (res.status === 429) throw new Error("The free image service is busy. Wait a few seconds and try again.");
+    if (!res.ok) throw new Error(`The free image service answered ${res.status}. Try again in a moment.`);
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) throw new Error("The free image service didn't send back an image. Try again.");
+    return blob;
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("The free image service took too long. Try again.");
+    if (err instanceof TypeError) throw new Error("Couldn't reach the free image service (pollinations.ai). Check your connection.");
+    throw err;
+  } finally { clearTimeout(t); }
+}
+
+// On-device generation runs in a worker, one image at a time.
+let imgWorker = null;
+let localChain = Promise.resolve();
+const localJobs = new Map();
+function getWorker() {
+  if (imgWorker) return imgWorker;
+  imgWorker = new Worker(new URL("./image-worker.js", import.meta.url), { type: "module" });
+  imgWorker.onmessage = ({ data }) => {
+    if (data.type === "loading") { for (const j of localJobs.values()) j.onProgress({ note: data.text, fraction: data.fraction }); return; }
+    const job = localJobs.get(data.id);
+    if (!job) return;
+    if (data.type === "progress") job.onProgress({ note: "Painting on your device…", fraction: data.fraction });
+    else if (data.type === "done") { localJobs.delete(data.id); job.resolve(data.blob); }
+    else if (data.type === "error") { localJobs.delete(data.id); job.reject(new Error(data.message)); }
+  };
+  imgWorker.onerror = (e) => {
+    for (const [id, j] of localJobs) { localJobs.delete(id); j.reject(new Error("The on-device image model couldn't start" + (e.message ? ": " + e.message : ". Check your connection for the first download."))); }
+    imgWorker = null;
+  };
+  return imgWorker;
+}
+function localGenerate(id, prompt, modelId, onProgress) {
+  const run = () => new Promise((resolve, reject) => {
+    localJobs.set(id, { resolve, reject, onProgress });
+    getWorker().postMessage({ type: "generate", id, prompt, modelId });
+  });
+  const p = localChain.then(run, run);
+  localChain = p.catch(() => {});
+  return p;
+}
+
 // ---------- UI ----------
 export function initCreate({ store, dataKey, toast, openAccount }) {
   const $ = (id) => document.getElementById(id);
@@ -146,7 +215,7 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
     endpoint: $("cEndpoint"), extra: $("cExtra"), go: $("cGo"), cost: $("cCost"), gallery: $("cGallery"), empty: $("cEmpty"),
     noKey: $("cNoKey"), ideas: $("cIdeas"), viewer: $("viewer"),
   };
-  const ui = { kind: "image", aspect: "1:1", ref: null, polling: new Set() };
+  const ui = { kind: "image", aspect: "1:1", ref: null, polling: new Set(), freeRunning: new Set() };
 
   const key = () => store.get("falKey:" + dataKey(), "");
   const gallery = () => store.get("gallery:" + dataKey(), []);
@@ -214,11 +283,14 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
   }
 
   function refresh() {
+    const m = model();
+    const needsKey = !m.free;
     const hasKey = !!key();
-    el.noKey.hidden = hasKey;
+    el.noKey.hidden = !needsKey || hasKey;
+    document.getElementById("cFine").textContent = m.provider === "local" ? "Made on your device. Nothing is sent anywhere." : m.provider === "pollinations" ? "Free cloud service by pollinations.ai. Your prompt is sent to them." : "Charged by fal.ai to your key. Prices shown are estimates.";
     const est = estimate();
-    el.cost.textContent = est == null ? "price: see fal.ai" : "≈ " + money(est);
-    el.go.disabled = !el.prompt.value.trim() || !hasKey;
+    el.cost.textContent = m.free ? "· Free" : est == null ? "price: see fal.ai" : "≈ " + money(est);
+    el.go.disabled = !el.prompt.value.trim() || (needsKey && !hasKey);
     renderGallery();
   }
 
@@ -238,8 +310,9 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
   async function generate() {
     const k = key();
     const prompt = el.prompt.value.trim();
-    if (!k || !prompt) return;
     const m = model();
+    if (!prompt || (!m.free && !k)) return;
+    if (m.free) return generateFree(m, prompt);
     const opts = { prompt, aspect: ui.aspect, count: Number(el.count.value) || 1, duration: Number(el.duration.value) || 5, audio: el.audio.checked, ref: ui.ref };
     const editing = !!(ui.ref && m.editEndpoint);
     const endpoint = el.endpoint.value.trim() || (editing ? m.editEndpoint : m.endpoint);
@@ -262,6 +335,34 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
       poll(item.id);
     } catch (err) {
       update(item.id, { status: "error", error: err.message });
+    }
+  }
+
+  async function generateFree(m, prompt) {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const owner = dataKey();
+    const item = {
+      id, kind: "image", model: m.name, provider: m.provider, prompt, aspect: m.aspects ? ui.aspect : "1:1",
+      createdAt: Date.now(), status: m.provider === "local" ? "local" : "IN_PROGRESS", note: m.provider === "local" ? "Starting the on-device model…" : null, urls: [],
+    };
+    ui.freeRunning.add(id);
+    saveGallery([item, ...gallery()]);
+    renderGallery();
+    el.go.classList.add("launch"); setTimeout(() => el.go.classList.remove("launch"), 600);
+    if (matchMedia("(max-width: 760px)").matches) el.gallery.scrollIntoView({ behavior: "smooth", block: "start" });
+    const mine = () => dataKey() === owner;
+    ui.freeRunning.add(id);
+    try {
+      const blob = m.provider === "pollinations"
+        ? await pollinations(prompt, ui.aspect, (secs) => mine() && update(id, { status: "waiting", note: `Free service: your turn in ${secs}s` }))
+        : await localGenerate(id, prompt, el.endpoint.value.trim() || m.endpoint, (p) => mine() && update(id, { status: "local", note: p.note, fraction: p.fraction }));
+      const blobKey = `${owner}:gen:${id}`;
+      await fileStore.put(blobKey, blob);
+      if (mine()) { update(id, { status: "done", blobKey, doneAt: Date.now() }); toast("Your image is ready ✨"); }
+    } catch (err) {
+      if (mine()) update(id, { status: "error", error: err.message });
+    } finally {
+      ui.freeRunning.delete(id);
     }
   }
 
@@ -288,10 +389,18 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
   }
 
   function resumePending() {
-    for (const it of gallery()) if (it.statusUrl && !["done", "error"].includes(it.status)) poll(it.id);
+    for (const it of gallery()) {
+      if (["done", "error"].includes(it.status)) continue;
+      if (it.statusUrl) poll(it.id);
+      else if (it.provider && !ui.freeRunning.has(it.id)) {
+        // Free generations run inside the app; if it was closed they can't be picked up again.
+        update(it.id, { status: "error", error: "Interrupted because the app was closed. Tap Generate to try again." });
+      }
+    }
   }
 
   function statusText(it) {
+    if (it.status === "local" || it.status === "waiting") return it.note || "Working…";
     const secs = Math.round((Date.now() - it.createdAt) / 1000);
     const t = secs < 60 ? secs + "s" : Math.floor(secs / 60) + "m " + (secs % 60) + "s";
     if (it.status === "submitting") return "Sending…";
@@ -310,15 +419,17 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
       card.className = "g-card " + (it.status === "done" ? "done" : it.status === "error" ? "error" : "pending");
       if (it.aspect) { const [w, h] = it.aspect.split(":").map(Number); card.style.setProperty("--ar", `${w} / ${h}`); }
       const media = document.createElement("div"); media.className = "g-media";
+      card.dataset.id = it.id;
       if (it.status === "done") {
-        const url = it.urls[0];
+        const url = it.urls[0] || "";
         if (it.kind === "video") {
           const v = document.createElement("video"); v.src = url; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "metadata";
           media.onmouseenter = () => v.play().catch(() => {}); media.onmouseleave = () => v.pause();
           media.appendChild(v);
           const play = document.createElement("span"); play.className = "g-play"; play.textContent = "▶"; media.appendChild(play);
         } else {
-          const img = document.createElement("img"); img.src = url; img.alt = it.prompt; img.loading = "lazy"; media.appendChild(img);
+          const img = document.createElement("img"); img.alt = it.prompt; img.loading = "lazy"; media.appendChild(img);
+          if (it.blobKey) blobUrl(it.blobKey).then((u) => { if (u) img.src = u; }); else img.src = url;
         }
         if (it.urls.length > 1) { const n = document.createElement("span"); n.className = "g-count"; n.textContent = "×" + it.urls.length; media.appendChild(n); }
         media.tabIndex = 0; media.setAttribute("role", "button"); media.setAttribute("aria-label", "Open " + it.prompt);
@@ -329,10 +440,15 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
       } else {
         pending = true;
         const s = document.createElement("div"); s.className = "g-status"; s.textContent = statusText(it); media.appendChild(s);
+        if (typeof it.fraction === "number") {
+          const bar = document.createElement("div"); bar.className = "g-progress";
+          const fill = document.createElement("i"); fill.style.width = Math.round(it.fraction * 100) + "%"; bar.appendChild(fill); media.appendChild(bar);
+        }
       }
       const cap = document.createElement("figcaption");
       const pr = document.createElement("span"); pr.className = "g-prompt"; pr.textContent = it.prompt;
       const meta = document.createElement("span"); meta.className = "g-meta"; meta.textContent = it.model + (it.edited ? " · edit" : "");
+      if (it.provider) { const tag = document.createElement("span"); tag.className = "free-tag"; tag.textContent = "FREE"; meta.append(" ", tag); }
       cap.append(pr, meta);
       if (it.status === "error") {
         const x = document.createElement("button"); x.type = "button"; x.className = "g-remove"; x.textContent = "Remove";
@@ -353,6 +469,10 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
     if (!it) return;
     viewing = it;
     const box = $("vMedia"); box.innerHTML = "";
+    if (it.blobKey) {
+      const img = document.createElement("img"); img.alt = it.prompt; box.appendChild(img);
+      blobUrl(it.blobKey).then((u) => { if (u) img.src = u; });
+    }
     for (const url of it.urls) {
       if (it.kind === "video") { const v = document.createElement("video"); v.src = url; v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true; box.appendChild(v); }
       else { const img = document.createElement("img"); img.src = url; img.alt = it.prompt; box.appendChild(img); }
@@ -366,10 +486,11 @@ export function initCreate({ store, dataKey, toast, openAccount }) {
   $("vReuse").addEventListener("click", () => { el.prompt.value = viewing.prompt; el.viewer.close(); refresh(); el.prompt.focus(); });
   $("vDelete").addEventListener("click", () => {
     if (!confirm("Remove this from your gallery?")) return;
+    if (viewing.blobKey) fileStore.del(viewing.blobKey).catch(() => {});
     saveGallery(gallery().filter((g) => g.id !== viewing.id)); el.viewer.close(); renderGallery();
   });
   $("vSave").addEventListener("click", async () => {
-    const url = viewing.urls[0];
+    const url = viewing.urls[0] || (viewing.blobKey ? await blobUrl(viewing.blobKey) : "");
     const ext = viewing.kind === "video" ? "mp4" : (url.match(/\.(png|jpe?g|webp)(\?|$)/i)?.[1] || "png");
     const name = `remtron5000-${viewing.id}.${ext}`;
     try {

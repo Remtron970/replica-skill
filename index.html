@@ -66,7 +66,10 @@
       </section>
 
       <form class="composer" id="composer">
+        <div class="attachments" id="attachments" hidden></div>
         <div class="composer-box">
+          <button type="button" class="attach-btn" id="attachBtn" aria-label="Attach photos or files" title="Attach photos or files">📎</button>
+          <input type="file" id="fileInput" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.tsv,.json,.xml,.html,.htm,.css,.js,.ts,.tsx,.jsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.sql,.yaml,.yml,.toml,.ini,.log,.srt,.vtt,text/*" />
           <textarea id="input" rows="1" placeholder="Message Remtron5000…" aria-label="Message"></textarea>
           <button type="submit" class="send" id="send" aria-label="Send">↑</button>
           <button type="button" class="send stop" id="stop" aria-label="Stop generating" hidden>■</button>
@@ -82,8 +85,8 @@
           </div>
 
           <div class="nokey card" id="cNoKey" hidden>
-            <b>Connect a fal.ai key to start creating</b>
-            <span>Images and videos are made by top cloud models (GPT Image 2, Nano Banana 2, Kling 3, Seedance 2.0, Veo 3.1). fal.ai bills your own account per creation, roughly $0.05–0.21 an image and $0.50–3 a video.</span>
+            <b>This model needs a fal.ai key</b>
+            <span>The top cloud models (GPT Image 2, Nano Banana 2, Kling 3, Seedance 2.0, Veo 3.1) are billed by fal.ai to your own account, roughly $0.05–0.21 an image and $0.50–3 a video. For free images, pick <b>FLUX (free)</b> or <b>Janus-Pro (free, on device)</b> under Model.</span>
             <button type="button" class="primary" id="cAddKey">Add my key</button>
           </div>
 
@@ -124,7 +127,7 @@
           </details>
 
           <button type="button" class="primary big go" id="cGo" disabled>✨ Generate <span class="cost" id="cCost"></span></button>
-          <p class="fine">Charged by fal.ai to your key. Prices shown are estimates.</p>
+          <p class="fine" id="cFine">Charged by fal.ai to your key. Prices shown are estimates.</p>
         </div>
 
         <div class="create-results">
