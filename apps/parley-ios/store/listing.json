@@ -1,0 +1,11 @@
+{
+  "avoid": ["ChatGPT", "OpenAI", "GPT"],
+  "app_store": {
+    "name": "Remtron5000: Private AI Chat",
+    "subtitle": "Offline AI on your iPhone",
+    "promotional_text": "Chat with an AI assistant that runs entirely on your iPhone. Your chats never leave your phone. Bring a fal.ai key to create images and videos too.",
+    "description": "Remtron5000 is an AI chat assistant that runs on your iPhone itself. Chat needs no account and no subscription, and your conversations are never sent to a server.\n\nAsk it to explain a topic, draft an email, brainstorm ideas, summarize notes or help with code. Answers stream in as they're written, with clear formatting and code you can copy in one tap.\n\nWhat you get:\n- Private by design: the AI model runs on your device's graphics chip\n- Free: no sign-up, no ads, no in-app purchases\n- Works offline once your model is downloaded\n- Choose from several open-source models, from tiny and fast to larger and smarter\n- Create images for free, on your device or with a free cloud model\n- Attach photos, PDFs and text files to your chats\n- Use your own fal.ai key for top image and video models (billed by fal.ai)\n- Optional accounts so each person on the phone gets their own chats\n- Chat history saved on your phone, with search, rename and delete\n- Edit a question or regenerate an answer\n- Custom instructions to set the assistant's tone\n- Light and dark mode\n\nGood to know: the first time you chat, Remtron5000 downloads the model you picked (about 0.3 to 1.4 GB) over the internet, so use Wi-Fi. On-device models are smaller than large cloud services. They're great for writing and explaining, but they can make mistakes, so check anything important. Requires iOS 26 or later.",
+    "keywords": "assistant,chatbot,llm,writing,ask,answers,local,notes,brainstorm,summarize,helper,email,study",
+    "whats_new": "First release."
+  }
+}

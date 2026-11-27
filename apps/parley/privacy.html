@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Remtron5000 Privacy Policy</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <style>
+    :root { --bg: #fff; --fg: #1c1c1f; --muted: #6b6b73; --accent: #4f46e5; color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #16171b; --fg: #ececf0; --muted: #9a9aa5; --accent: #8b85ff; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 40px 16px 64px; }
+    h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 19px; margin-top: 32px; }
+    .muted { color: var(--muted); } a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Remtron5000 Privacy Policy</h1>
+  <p class="muted">Last updated: 27 November 2026 (accounts, image/video generation and attachments added)</p>
+
+  <p>Remtron5000 is an AI chat assistant that runs on your own device. We built it so that
+  your conversations stay with you. This page explains exactly what happens to your data.</p>
+
+  <h2>What we collect</h2>
+  <p><strong>Nothing.</strong> Remtron5000 has no analytics, no advertising and no
+  tracking. We do not run a server that receives your messages, and we never see what
+  you type or what the assistant answers.</p>
+
+  <h2>Accounts</h2>
+  <p>You can use Remtron5000 as a guest or create an account. Accounts exist only on
+  the device where you create them: your username, display name and avatar color are
+  saved in the app's local storage, and your password is stored only as a salted
+  PBKDF2 hash. Accounts are never sent to us or anyone else, and they don't sync
+  between devices. You can delete your account at any time from the Account page,
+  which also deletes all of its chats.</p>
+
+  <h2>Where your data is stored</h2>
+  <p>Your chats, custom instructions and settings are saved only on your device, in the
+  app's local storage. Deleting a chat, using “Delete all chats” in Settings, or removing
+  the app deletes them. We cannot recover them, because we never had them.</p>
+
+  <h2>Image and video generation (optional)</h2>
+  <p>The Create tab is off until you add your own fal.ai API key. When you use it,
+  your prompt, any photo you choose to edit, and your key are sent directly from your
+  device to <a href="https://fal.ai">fal.ai</a>, which runs the image or video model
+  you picked (for example from OpenAI, Google, ByteDance or Kuaishou) and bills your
+  fal.ai account. fal.ai and the model provider handle that data under their own
+  terms and privacy policies. We never receive your prompts, photos, results or key.
+  Your key and your gallery list are stored only on your device.</p>
+
+  <h2>Free image generation (optional)</h2>
+  <p>If you choose <strong>FLUX (free)</strong> in the Create tab, your prompt is sent to
+  <a href="https://pollinations.ai">pollinations.ai</a>, a free image service, which
+  returns the picture. Pollinations handles prompts under its own terms. If you choose
+  <strong>Janus-Pro (free, on device)</strong>, the image is made entirely on your device
+  and nothing is sent anywhere.</p>
+
+  <h2>Photos and files in chat</h2>
+  <p>Photos and files you attach to a chat are read on your device and stored there with
+  the chat. With the built-in on-device models they never leave your device. If you
+  switch the engine to Ollama, they go only to the Ollama address you set, which is
+  normally your own computer.</p>
+
+  <h2>Downloads the app makes</h2>
+  <p>To run the AI on your device, Remtron5000 downloads the open-source model you choose
+  (from public hosts such as Hugging Face, GitHub and jsDelivr) the first time you use
+  it. These are ordinary file downloads. Your messages and any personal information are
+  not included in them. Like any website, those hosts can see your IP address when you
+  download a file, under their own privacy policies.</p>
+  <p>If you use the optional Ollama engine in the web version, your messages are sent
+  only to the Ollama address you enter, which is normally your own computer.</p>
+
+  <h2>Children</h2>
+  <p>Remtron5000 does not knowingly collect information from anyone, including children
+  under 13.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, we will update this page and the date at the top.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? Open an issue at
+  <a href="https://github.com/Remtron970/replica-skill/issues">github.com/Remtron970/replica-skill/issues</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#fff1e6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1f1813" media="(prefers-color-scheme: dark)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Remtron5000" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <title>Remtron5000: free AI chat</title>
+  <meta name="description" content="Remtron5000 is a free AI chat assistant that runs on your device. No API key, no server, no subscription." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Conversations">
+      <div class="sidebar-top">
+        <div class="brand"><img src="icons/icon.svg" alt="" class="brand-logo" /> <span>Remtron<b>5000</b></span></div>
+        <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close sidebar">✕</button>
+      </div>
+      <button class="new-chat" id="newChat"><span class="plus" aria-hidden="true">＋</span> New chat</button>
+      <input class="search" id="search" type="search" placeholder="Search chats" aria-label="Search chats" />
+      <nav class="chat-list" id="chatList"></nav>
+      <div class="sidebar-bottom">
+        <button class="link-btn install-btn" id="installApp" hidden>⤓ Install app</button>
+        <button class="link-btn" id="openSettings">⚙ Settings</button>
+        <button class="profile-chip" id="openAccount" aria-label="Account">
+          <span class="avatar sm" id="chipAvatar"></span>
+          <span class="chip-text"><span class="chip-name" id="chipName">Guest</span><span class="chip-sub" id="chipSub">Sign in</span></span>
+          <span class="chip-arrow" aria-hidden="true">›</span>
+        </button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="openSidebar" aria-label="Open sidebar">☰</button>
+        <div class="modes" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" id="modeChat" aria-selected="true"><span aria-hidden="true">💬</span><span class="mode-label"> Chat</span></button>
+          <button type="button" role="tab" id="modeCreate" aria-selected="false"><span aria-hidden="true">🎨</span><span class="mode-label"> Create</span></button>
+        </div>
+        <label class="model-pick chat-only">
+          <span class="sr-only">Model</span>
+          <select id="modelSelect" aria-label="Model"></select>
+        </label>
+        <span class="status chat-only" id="status" role="status" aria-live="polite">Model not loaded</span>
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle light and dark theme">☾</button>
+        <button class="avatar sm top-avatar" id="topAvatar" aria-label="Account"></button>
+      </header>
+
+      <div class="progress" id="progress" hidden><div class="bar" id="progressBar"></div></div>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <section class="empty" id="empty">
+        <img src="icons/icon.svg" alt="" class="hero-logo" />
+        <h1 id="greeting">What can I help with?</h1>
+        <p class="sub">Private and free. Chat runs right here on your device, so your conversations never leave it.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </section>
+
+      <form class="composer" id="composer">
+        <div class="attachments" id="attachments" hidden></div>
+        <div class="composer-box">
+          <button type="button" class="attach-btn" id="attachBtn" aria-label="Attach photos or files" title="Attach photos or files">📎</button>
+          <input type="file" id="fileInput" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.tsv,.json,.xml,.html,.htm,.css,.js,.ts,.tsx,.jsx,.py,.rb,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.cs,.php,.sh,.sql,.yaml,.yml,.toml,.ini,.log,.srt,.vtt,text/*" />
+          <textarea id="input" rows="1" placeholder="Message Remtron5000…" aria-label="Message"></textarea>
+          <button type="submit" class="send" id="send" aria-label="Send">↑</button>
+          <button type="button" class="send stop" id="stop" aria-label="Stop generating" hidden>■</button>
+        </div>
+        <p class="hint">Small local models can be wrong. Check important facts. First load downloads the model once (~0.3–2 GB), then it's cached.</p>
+      </form>
+
+      <section class="create" id="createView" data-kind="image" hidden>
+        <div class="create-panel">
+          <div class="kind" role="group" aria-label="What to make">
+            <button type="button" id="cKindImage" aria-pressed="true">🖼️ Image</button>
+            <button type="button" id="cKindVideo" aria-pressed="false">🎬 Video</button>
+          </div>
+
+          <div class="nokey card" id="cNoKey" hidden>
+            <b>This model needs a fal.ai key</b>
+            <span>The top cloud models (GPT Image 2, Nano Banana 2, Kling 3, Seedance 2.0, Veo 3.1) are billed by fal.ai to your own account, roughly $0.05–0.21 an image and $0.50–3 a video. For free images, pick <b>FLUX (free)</b> or <b>Janus-Pro (free, on device)</b> under Model.</span>
+            <button type="button" class="primary" id="cAddKey">Add my key</button>
+          </div>
+
+          <label class="field">Prompt
+            <textarea id="cPrompt" rows="4" placeholder="Describe the image you want…"></textarea>
+          </label>
+          <div class="ideas" id="cIdeas"></div>
+
+          <div class="field" id="cRefRow">
+            <span>Edit a photo <span class="muted">(optional)</span></span>
+            <label class="ref-pick"><input type="file" id="cRefInput" accept="image/*" hidden />📎 Choose a photo</label>
+            <div class="ref-preview" id="cRefPreview" hidden>
+              <img id="cRefImg" alt="Photo to edit" />
+              <button type="button" class="icon-btn" id="cRefClear" aria-label="Remove photo">✕</button>
+            </div>
+          </div>
+
+          <label class="field">Model
+            <select id="cModel"></select>
+            <span class="model-note" id="cModelNote"></span>
+          </label>
+
+          <div class="field" id="cAspectRow"><span>Shape</span><div class="chips" id="cAspects"></div></div>
+
+          <div class="row">
+            <label class="field" id="cCountRow">How many
+              <select id="cCount"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+            </label>
+            <label class="field" id="cDurRow">Length <select id="cDuration"></select></label>
+            <label class="check" id="cAudioRow"><input type="checkbox" id="cAudio" checked /> Sound</label>
+          </div>
+
+          <details class="advanced">
+            <summary>Advanced</summary>
+            <label class="field">fal.ai model ID <input id="cEndpoint" spellcheck="false" autocapitalize="none" /></label>
+            <label class="field">Extra options (JSON) <textarea id="cExtra" rows="2" spellcheck="false" placeholder='{"seed": 42}'></textarea></label>
+            <p class="fine">Leave the ID empty to use the model picked above. Any fal.ai model ID works here.</p>
+          </details>
+
+          <button type="button" class="primary big go" id="cGo" disabled>✨ Generate <span class="cost" id="cCost"></span></button>
+          <p class="fine" id="cFine">Charged by fal.ai to your key. Prices shown are estimates.</p>
+        </div>
+
+        <div class="create-results">
+          <div class="c-empty" id="cEmpty">
+            <div class="c-empty-art" aria-hidden="true"><span>🖼️</span><span>🎬</span><span>✨</span></div>
+            <p>Your creations will appear here.</p>
+          </div>
+          <div class="gallery" id="cGallery"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Sign in / create account -->
+  <div class="auth" id="auth" hidden>
+    <div class="auth-blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <img src="icons/icon.svg" alt="" class="auth-logo" />
+      <h1 id="authTitle">Welcome to Remtron<b>5000</b></h1>
+      <p class="auth-sub">Your private AI assistant.</p>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabSignIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabSignUp" aria-selected="false">Create account</button>
+        <span class="tab-ink" aria-hidden="true"></span>
+      </div>
+      <form id="authForm" class="auth-form" novalidate>
+        <label id="nameRow" hidden>Your name
+          <input id="authName" autocomplete="name" maxlength="40" placeholder="e.g. Sam" />
+        </label>
+        <label>Username
+          <input id="authUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="letters, numbers, _ or ." required />
+        </label>
+        <label>Password
+          <input id="authPass" type="password" autocomplete="current-password" minlength="6" required />
+        </label>
+        <label class="check" id="bringRow" hidden><input type="checkbox" id="bringChats" checked /> Bring my guest chats into this account</label>
+        <p class="form-error" id="authError" role="alert"></p>
+        <button class="primary big" id="authSubmit">Sign in</button>
+      </form>
+      <button type="button" class="link-btn guest-btn" id="continueGuest">Continue without an account</button>
+      <p class="fine">Accounts are stored on this device only. Nothing is sent to a server.</p>
+    </div>
+  </div>
+
+  <!-- Account page -->
+  <dialog id="account" class="sheet">
+    <div class="account-page">
+      <header class="account-head">
+        <button type="button" class="icon-btn" id="closeAccount" aria-label="Close">✕</button>
+        <h2>Account</h2>
+        <span></span>
+      </header>
+
+      <section class="account-hero">
+        <div class="avatar xl" id="accAvatar"></div>
+        <h3 id="accName">Guest</h3>
+        <p class="muted" id="accHandle"></p>
+        <div class="stats">
+          <div><b id="statChats">0</b><span>chats</span></div>
+          <div><b id="statMsgs">0</b><span>messages</span></div>
+          <div><b id="statSince">-</b><span>member since</span></div>
+        </div>
+      </section>
+
+      <section class="account-key">
+        <form class="card" id="keyForm">
+          <h4>🎨 Image &amp; video generation</h4>
+          <p class="fine left">Paste your fal.ai API key to use GPT Image 2, Nano Banana 2, Kling 3, Seedance 2.0 and Veo 3.1. Get one at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a>. It stays on this device and is only sent to fal.ai.</p>
+          <input type="text" autocomplete="username" id="keyUserHint" hidden />
+          <label>fal.ai key <input type="password" id="falKey" autocomplete="off" spellcheck="false" placeholder="key-id:secret" /></label>
+          <p class="form-ok" id="keyOk" role="status"></p>
+          <div class="row-btns left">
+            <button class="primary">Save key</button>
+            <button type="button" class="ghost" id="keyRemove">Remove</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="account-guest" id="accGuest">
+        <p>You're using Remtron5000 as a guest. Create an account to keep separate chats for each person using this device.</p>
+        <div class="row-btns">
+          <button type="button" class="primary" id="accSignUp">Create account</button>
+          <button type="button" class="ghost" id="accSignIn">Sign in</button>
+        </div>
+      </section>
+
+      <section class="account-user" id="accUser">
+        <form class="card" id="profileForm">
+          <h4>Profile</h4>
+          <label>Display name <input id="profName" maxlength="40" /></label>
+          <fieldset class="swatches" id="swatches"><legend>Avatar color</legend></fieldset>
+          <button class="primary">Save profile</button>
+          <p class="form-ok" id="profileOk" role="status"></p>
+        </form>
+
+        <form class="card" id="passForm">
+          <h4>Change password</h4>
+          <input type="text" autocomplete="username" id="passUserHint" hidden />
+          <label>Current password <input type="password" id="passOld" autocomplete="current-password" /></label>
+          <label>New password <input type="password" id="passNew" autocomplete="new-password" minlength="6" /></label>
+          <p class="form-error" id="passError" role="alert"></p>
+          <p class="form-ok" id="passOk" role="status"></p>
+          <button class="ghost">Update password</button>
+        </form>
+
+        <div class="card">
+          <button type="button" class="ghost wide" id="signOut">Sign out</button>
+          <button type="button" class="danger wide" id="deleteAccount">Delete account</button>
+          <p class="fine">Deleting your account removes it and all its chats from this device.</p>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="viewer" class="viewer">
+    <div class="viewer-body">
+      <div class="viewer-media" id="vMedia"></div>
+      <div class="viewer-info">
+        <p id="vPrompt"></p>
+        <p class="muted" id="vMeta"></p>
+        <div class="row-btns left">
+          <button type="button" class="primary" id="vSave">⤓ Save</button>
+          <button type="button" class="ghost" id="vReuse">Use prompt</button>
+          <button type="button" class="ghost" id="vDelete">Remove</button>
+          <button type="button" class="ghost" id="vClose">Close</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>Settings</h2>
+      <label>Engine
+        <select id="engineSelect">
+          <option value="webllm">In-browser (WebGPU), no install</option>
+          <option value="ollama">Ollama on this computer</option>
+        </select>
+      </label>
+      <label id="ollamaUrlRow">Ollama URL
+        <input id="ollamaUrl" type="url" value="http://localhost:11434" />
+      </label>
+      <label>Custom instructions (system prompt)
+        <textarea id="systemPrompt" rows="4"></textarea>
+      </label>
+      <label>Temperature <output id="tempOut">0.7</output>
+        <input id="temperature" type="range" min="0" max="1.5" step="0.1" value="0.7" />
+      </label>
+      <div class="settings-actions">
+        <button type="button" class="danger" id="clearAll">Delete all chats</button>
+        <button value="close" class="primary">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="installHelp">
+    <form method="dialog" class="settings-form">
+      <h2>Install Remtron5000</h2>
+      <p id="installSteps"></p>
+      <div class="settings-actions"><span></span><button value="close" class="primary">Got it</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

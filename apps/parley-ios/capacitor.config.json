@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.remtron970.remtron5000",
+  "appName": "Remtron5000",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#17120f",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
