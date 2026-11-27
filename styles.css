@@ -155,6 +155,10 @@ dialog::backdrop { background: #0006; }
 /* Mobile */
 @media (max-width: 760px) {
   .only-mobile { display: inline-block; }
+  .topbar { gap: 6px; padding: 8px 10px; }
+  .status[data-state="idle"] { display: none; }
+  .model-pick { flex: 1; min-width: 0; }
+  .model-pick select { width: 100%; max-width: none; }
   .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; transform: translateX(-100%); transition: transform .2s; width: 280px; }
   .app.sidebar-open .sidebar { transform: none; }
   .scrim { position: fixed; inset: 0; background: #0005; z-index: 10; }
