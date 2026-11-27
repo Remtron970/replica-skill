@@ -162,3 +162,15 @@ app opens and navigates with the network off.
   API shapes, so the first real sync may reveal differences to fix.
 
 **Next step:** Phase 5 — Schedule & assignments.
+
+## After Phase 4 — StudentVUE support (2026-11-27)
+You use **Canvas, Google Classroom and StudentVUE**.
+- Import now reads StudentVUE gradebook tables: "18 out of 20" scores, the
+  Points column ("18.00 / 20.00", "/ 25.0000"), Not Graded, Missing and Exc.
+  (Before this, "18 out of 20" would have been misread as 1820.)
+- Fixed: missing/excused rows now keep their point value, so missing work counts as 0.
+- Wording in Import, Settings and Academics mentions StudentVUE; class form explains
+  credits 0 for duplicate copies of a class; guide Part D (StudentVUE) and
+  "Using Canvas, Classroom and StudentVUE together" in docs/SETUP_SCHOOL.md.
+- Verified: 167 unit tests, 113 end-to-end checks.
+- Idea for later: link the same class across platforms automatically instead of using credits 0.

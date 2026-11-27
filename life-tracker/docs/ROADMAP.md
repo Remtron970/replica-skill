@@ -25,6 +25,7 @@ after your approval.
 - Demo data is opt-in, labeled, and removable in one tap.
 
 ## Ideas for later (not committed)
+- Link the same class across Canvas, Classroom and StudentVUE (one class, several sources) instead of setting duplicates to 0 credits.
 - Outlook / Microsoft 365 mail & calendar.
 - Home Screen widgets (needs the native shell).
 - Study-time tracking with a focus timer linked to assignments.

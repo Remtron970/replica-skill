@@ -38,13 +38,15 @@ export function parseDelimited(text: string): string[][] {
   return rows;
 }
 
-type Field = "course" | "title" | "category" | "earned" | "possible" | "date";
+type Field = "course" | "title" | "category" | "earned" | "possible" | "points" | "date";
 const SYNONYMS: Record<Field, string[]> = {
   course: ["class", "course", "subject", "class name", "course name", "section"],
   title: ["assignment", "title", "name", "assignment name", "item", "description"],
   category: ["category", "type", "assignment type", "grading category"],
-  earned: ["score", "earned", "points earned", "points", "grade", "mark", "result"],
+  earned: ["score", "earned", "points earned", "grade", "mark", "result"],
   possible: ["out of", "possible", "points possible", "total", "max", "max points", "total points", "worth"],
+  // StudentVUE-style "18.00 / 20.00" column; also used as the score when there's no Score column.
+  points: ["points"],
   date: ["date", "graded", "graded on", "date graded", "due", "due date", "assigned"],
 };
 
@@ -105,7 +107,7 @@ export interface ImportRow {
 
 const MISSING = /^(missing|miss|m|0\*|z)$/i;
 const EXCUSED = /^(ex|exc|excused|exempt|x)$/i;
-const BLANK = /^(|-|--|—|n\/a|na|ng|not graded|\*)$/i;
+const BLANK = /^(|-|--|—|n\/a|na|ng|not graded|not due|not yet graded|pending|\*)$/i;
 
 /** Read one score cell: "18", "18/20", "90%", "Missing", "EX", "--". */
 export function parseScore(cell: string, possibleCell?: string): Pick<ImportRow, "earned" | "possible" | "missing" | "excused"> & { error?: string } {
@@ -114,8 +116,14 @@ export function parseScore(cell: string, possibleCell?: string): Pick<ImportRow,
   if (MISSING.test(s)) return { earned: null, possible, missing: true, excused: false };
   if (EXCUSED.test(s)) return { earned: null, possible, missing: false, excused: true };
   if (BLANK.test(s)) return { earned: null, possible, missing: false, excused: false };
-  const frac = s.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  // "18/20", "18 / 20", "18.00 out of 20.00"
+  const frac = s.match(/^(-?\d+(?:\.\d+)?)\s*(?:\/|out of)\s*(\d+(?:\.\d+)?)\s*$/i);
   if (frac) return { earned: +frac[1], possible: +frac[2], missing: false, excused: false };
+  // "/ 25" (not graded yet, worth 25)
+  const worth = s.match(/^(?:\/|out of)\s*(\d+(?:\.\d+)?)\s*$/i);
+  if (worth) return { earned: null, possible: +worth[1], missing: false, excused: false };
+  // Anything else with letters in it isn't a number we should guess at.
+  if (/[a-z]/i.test(s.replace(/%/g, ""))) return { earned: null, possible, missing: false, excused: false, error: `Couldn't read score "${s}"` };
   if (/%\s*$/.test(s) && possible === null) {
     const p = num(s);
     return p === null ? { earned: null, possible: null, missing: false, excused: false, error: `Couldn't read score "${s}"` } : { earned: p, possible: 100, missing: false, excused: false };
@@ -137,14 +145,23 @@ export function parseGrades(text: string, opts: { defaultCourse?: string; year?:
   if (table.length < 2) return { columns: {}, rows: [], problem: "Paste a header row plus at least one row of grades." };
   const columns = detectColumns(table[0]);
   if (columns.title === undefined) return { columns, rows: [], problem: "Couldn't find an assignment name column (e.g. “Assignment”)." };
-  if (columns.earned === undefined) return { columns, rows: [], problem: "Couldn't find a score column (e.g. “Score”)." };
+  if (columns.earned === undefined && columns.points === undefined) return { columns, rows: [], problem: "Couldn't find a score column (e.g. “Score”)." };
   if (columns.course === undefined && !opts.defaultCourse) return { columns, rows: [], problem: "Couldn't find a class column. Choose which class these grades belong to." };
 
   const rows = table.slice(1).map((cells, i): ImportRow => {
     const get = (f: Field) => (columns[f] === undefined ? "" : (cells[columns[f]!] ?? ""));
     const course = (get("course") || opts.defaultCourse || "").trim();
     const title = get("title").trim();
-    const score = parseScore(get("earned"), columns.possible === undefined ? undefined : get("possible"));
+    let score = parseScore(columns.earned === undefined ? get("points") : get("earned"), columns.possible === undefined ? undefined : get("possible"));
+    // StudentVUE shows both "Score" (e.g. 86, as a percentage) and "Points" (86.00 / 100.00): prefer the points.
+    if (columns.points !== undefined && columns.earned !== undefined) {
+      const pts = parseScore(get("points"));
+      if (!pts.error && pts.possible !== null) {
+        if (score.missing || score.excused) score = { ...score, possible: score.possible ?? pts.possible };
+        else if (score.error || score.possible === null || score.earned === null)
+          score = { ...pts, earned: score.earned === null && !score.error ? null : pts.earned };
+      }
+    }
     const dateRaw = get("date");
     const date = dateRaw ? parseDate(dateRaw, opts.year) : null;
     let error = score.error;

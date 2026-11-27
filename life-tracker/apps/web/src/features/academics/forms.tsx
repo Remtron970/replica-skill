@@ -119,7 +119,7 @@ export function CourseForm({ course, onDone }: { course?: Course; onDone: (id: s
             </option>
           ))}
         </Select>
-        <TextField id="course-credits" label="Credits" inputMode="decimal" value={credits} onChange={(e) => setCredits(e.target.value)} error={tried ? errors.credits : undefined} hint="Usually 1 (or 0.5 for a semester)." />
+        <TextField id="course-credits" label="Credits" inputMode="decimal" value={credits} onChange={(e) => setCredits(e.target.value)} error={tried ? errors.credits : undefined} hint="Usually 1 (0.5 for a semester). Use 0 to leave it out of GPA, e.g. a second copy of the same class from Canvas or Classroom." />
       </div>
       <div>
         <p className="mb-1.5 text-[13px] font-semibold">How is this class graded?</p>
@@ -137,7 +137,7 @@ export function CourseForm({ course, onDone }: { course?: Course; onDone: (id: s
         <p className="mt-1.5 text-[12.5px] text-muted">
           {mode === "points" && "Your grade is all points earned ÷ all points possible."}
           {mode === "weighted" && "Categories like Tests 50% and Homework 20% each count for a set share. You'll set them up next."}
-          {mode === "manual" && "Just type the percentage your school portal shows. Good for PowerSchool or Infinite Campus."}
+          {mode === "manual" && "Just type the percentage your school portal shows (StudentVUE, PowerSchool…). Matches your official grade exactly."}
         </p>
       </div>
       {mode === "manual" && (

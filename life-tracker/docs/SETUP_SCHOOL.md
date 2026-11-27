@@ -12,6 +12,7 @@ stay off your devices.
 |---|---|---|
 | Canvas | Usually | Personal access token (below) |
 | Google Classroom | If your school allows it | Sign in with Google (below) |
+| StudentVUE (Synergy) | No student API for apps | Academics → **Import** (copy your gradebook, paste it) — see Part D |
 | PowerSchool | No student API | Academics → **Import** (copy your grade table, paste it) |
 | Infinite Campus | No student API | Academics → **Import** |
 
@@ -82,6 +83,35 @@ Notes:
   third-party apps, the app shows "Blocked by school" — use Import instead.
 - Classroom doesn't label work as "missing" in its API. Like the Classroom app,
   Life Tracker counts work as missing when it's past due and not turned in.
+
+## Part D — StudentVUE
+StudentVUE only lets its own app sign in with your school password, and Life
+Tracker won't ask for that. Copy-paste works well instead and needs no setup:
+
+1. Open StudentVUE **in a web browser** (your district's StudentVUE address; the
+   phone app doesn't allow copying tables).
+2. **Grade Book** → choose a class → its assignment list.
+3. Select the whole table, starting at the heading row (Date, Assignment,
+   Assignment Type, Score, …), and copy it.
+4. Life Tracker → **Academics → Import** → paste, type the class name when asked,
+   check the preview, **Import**. Do this per class.
+5. Run it again whenever you like — grades you already imported are skipped.
+
+Life Tracker reads StudentVUE's "18 out of 20" scores and its Points column,
+"Not Graded" work, and missing/excused marks. Category weights aren't part of the
+copied table: open the class, set **How is this class graded? → Categories**, and
+enter the weights shown in StudentVUE's grade summary. Or, if you only want the
+official number, set the class to **Portal %** and type the percentage StudentVUE shows.
+
+## Using Canvas, Classroom and StudentVUE together
+The same class can arrive from more than one place (e.g. Biology in Canvas *and*
+in StudentVUE). Each copy would count in your GPA. A simple setup:
+
+- **StudentVUE is your school's official gradebook** — let those classes count
+  for GPA (imported grades, or Portal %).
+- **Canvas / Classroom copies** of the same classes are still useful for
+  assignments and recent scores: open each one → Edit → **Credits 0** so it
+  doesn't count twice.
 
 ## What syncs, and what stays yours
 - Classes, categories and weights, assignments, scores, due dates, missing/excused.

@@ -169,8 +169,8 @@ export function SchoolConnections() {
         {row("canvas", "Canvas", () => setCanvasOpen(true))}
         <li className="py-1">
           <ListRow
-            title="PowerSchool · Infinite Campus"
-            subtitle="These don't offer student access, so use Import (copy your grade table, paste it in)."
+            title="StudentVUE · PowerSchool · Infinite Campus"
+            subtitle="These don't offer student access for apps, so use Import: copy your gradebook table and paste it in."
             trailing={<Badge>Use import</Badge>}
             onClick={() => navigate("/academics/import")}
             icon={<FileUp size={18} className="text-muted" aria-hidden />}

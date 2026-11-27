@@ -64,7 +64,7 @@ export function AcademicsPage() {
             icon={GraduationCap}
             accent={sec.accent}
             title="Add your classes"
-            body="Enter your classes and grades, paste them from your school portal, or (soon) connect Google Classroom or Canvas. Your GPA and trends appear here."
+            body="Enter your classes and grades, paste them from StudentVUE or another school portal, or connect Canvas or Google Classroom (Settings). Your GPA and trends appear here."
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button icon={Plus} onClick={() => setPanel("add")}>

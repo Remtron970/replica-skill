@@ -36,7 +36,7 @@ export function ImportPage() {
     <>
       <PageHeader
         title="Import grades"
-        subtitle="Paste a grade table or choose a CSV file — no school password needed."
+        subtitle="Paste a grade table from StudentVUE, PowerSchool or a spreadsheet — no school password needed."
         icon={FileUp}
         accent="bg-accent-purple/12 text-accent-purple"
         right={<IconBack onClick={() => navigate("/academics")} />}
@@ -44,7 +44,10 @@ export function ImportPage() {
       <div className="space-y-4">
         <SectionCard title="1. Copy your grades" icon={ClipboardPaste} accent="bg-surface-2 text-muted">
           <ol className="list-inside list-decimal space-y-1 text-[14px] text-muted">
-            <li>In PowerSchool, Infinite Campus or a spreadsheet, select the grade table (including its heading row) and copy it.</li>
+            <li>
+              Open your gradebook in a web browser (StudentVUE: Grade Book → pick a class; PowerSchool, Infinite Campus or a spreadsheet work too),
+              select the assignment table including its heading row, and copy it.
+            </li>
             <li>Paste it below, or export a CSV file and choose it.</li>
             <li>Check the preview, then import. Running it again skips grades you already have.</li>
           </ol>

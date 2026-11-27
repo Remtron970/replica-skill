@@ -80,6 +80,35 @@ describe("parseGrades", () => {
   });
 });
 
+describe("StudentVUE gradebook paste", () => {
+  // Columns as shown in StudentVUE's Gradebook assignment list (copied from the web portal).
+  const paste = [
+    "Date\tAssignment\tAssignment Type\tScore\tScore Type\tPoints\tNotes",
+    "9/12/2026\tCell structure quiz\tQuizzes\t18 out of 20\tRaw Score\t18.00 / 20.00\t",
+    "9/20/2026\tLab report\tLabs\tNot Graded\tRaw Score\t/ 25.0000\t",
+    "9/22/2026\tUnit 1 test\tTests\t86\tPercentage\t86.00 / 100.00\tRetake allowed",
+    "9/24/2026\tHomework 3\tHomework\tMissing\tRaw Score\t0.00 / 10.00\t",
+    "9/26/2026\tHomework 4\tHomework\tExc\tRaw Score\t/ 10.0000\t",
+  ].join("\n");
+
+  it("reads “x out of y”, the Points column, not-graded and missing/excused work", () => {
+    const r = parseGrades(paste, { defaultCourse: "Biology" });
+    expect(r.problem).toBeUndefined();
+    expect(r.rows.map((x) => [x.title, x.category, x.earned, x.possible, x.missing, x.excused, x.date, x.error])).toEqual([
+      ["Cell structure quiz", "Quizzes", 18, 20, false, false, "2026-09-12", undefined],
+      ["Lab report", "Labs", null, 25, false, false, "2026-09-20", undefined],
+      ["Unit 1 test", "Tests", 86, 100, false, false, "2026-09-22", undefined],
+      ["Homework 3", "Homework", null, 10, true, false, "2026-09-24", undefined],
+      ["Homework 4", "Homework", null, 10, false, true, "2026-09-26", undefined],
+    ]);
+  });
+
+  it("never turns text like “18 out of 20” into a made-up number", () => {
+    expect(parseScore("18 out of 20")).toMatchObject({ earned: 18, possible: 20 });
+    expect(parseScore("about 18").error).toMatch(/Couldn't read/);
+  });
+});
+
 describe("planImport", () => {
   const courses: Course[] = [{ ...base, id: "c1", termId: null, name: "Biology", teacher: "", room: "", color: "purple", credits: 1, level: "regular", gradingMode: "points", manualPercent: null, scaleId: null, archived: false }];
   const cats: GradeCategory[] = [{ ...base, id: "k1", courseId: "c1", name: "Quizzes", weight: 20, sort: 0 }];

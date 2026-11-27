@@ -509,9 +509,9 @@ try {
     await settle(a);
     const sc = a.getByRole("region", { name: "School connections" });
     ok((await sc.innerText()).includes("Needs sign-in"), "school connections explain they need sign-in");
-    await sc.getByRole("button", { name: /PowerSchool/ }).click();
+    await sc.getByRole("button", { name: /StudentVUE/ }).click();
     await settle(a, 300);
-    ok(a.url().endsWith("#/academics/import"), "PowerSchool/Infinite Campus point to Import");
+    ok(a.url().endsWith("#/academics/import"), "StudentVUE/PowerSchool/Infinite Campus point to Import");
     await a.goto(`${URL}#/settings`);
     await settle(a);
     await a.fill("#name", "Remy");
