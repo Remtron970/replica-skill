@@ -8,6 +8,8 @@ import { SkeletonCard, ToastProvider } from "./components/ui";
 import { HomePage } from "./features/home/HomePage";
 import { SectionPage } from "./features/section/SectionPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { AccountPage } from "./features/account/AccountPage";
+import { AuthProvider } from "./lib/auth";
 import { PrefsProvider } from "./lib/prefs";
 import "./styles.css";
 
@@ -41,6 +43,7 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: "settings", element: <SettingsPage /> },
+      { path: "account", element: <AccountPage /> },
       {
         path: "design",
         element: (
@@ -66,11 +69,13 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* reducedMotion="user": honors the iPhone's Reduce Motion setting everywhere. */}
     <MotionConfig reducedMotion="user">
-      <PrefsProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </PrefsProvider>
+      <AuthProvider>
+        <PrefsProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </PrefsProvider>
+      </AuthProvider>
     </MotionConfig>
   </StrictMode>,
 );

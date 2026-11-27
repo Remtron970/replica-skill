@@ -1,14 +1,14 @@
-import { Monitor, Moon, Palette, Smartphone, Sun } from "lucide-react";
-import { useState } from "react";
+import { CloudOff, LayoutDashboard, Monitor, Moon, Palette, Smartphone, Sun, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PINNABLE, SECTION_BY_ID } from "../../app/sections";
 import { InstallCard } from "../../components/InstallCard";
-import { Badge, Button, Chip, IconChip, ListRow, PageHeader, SectionCard, SegmentedControl, TextField, useToast } from "../../components/ui";
+import { Badge, Button, Chip, IconChip, ListRow, PageHeader, SectionCard, SegmentedControl, Sheet, Switch, TextField, useToast } from "../../components/ui";
+import { useAuth } from "../../lib/auth";
+import { CustomizeDashboard } from "../home/CustomizeDashboard";
 import { MAX_PINS, usePrefs, type ThemePref } from "../../lib/prefs";
 
 const COMING = [
-  ["Account & sign-in", 3],
-  ["Data export & delete account", 3],
   ["School integrations", 4],
   ["Email integrations", 6],
   ["Health permissions", 7],
@@ -24,6 +24,10 @@ export function SettingsPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const [name, setName] = useState(prefs.name);
+  // Follow changes that arrive from another device.
+  useEffect(() => setName(prefs.name), [prefs.name]);
+  const [customizing, setCustomizing] = useState(false);
+  const auth = useAuth();
 
   const togglePin = (id: (typeof PINNABLE)[number]) => {
     const on = prefs.pins.includes(id);
@@ -39,6 +43,22 @@ export function SettingsPage() {
       <PageHeader title={s.label} subtitle={s.tagline} icon={s.icon} accent={s.accent} />
 
       <div className="space-y-4">
+        <SectionCard title="Account" icon={UserRound} accent="bg-brand-soft text-brand-ink">
+          <ListRow
+            icon={!auth.enabled ? <IconChip icon={CloudOff} accent="bg-surface-2 text-muted" size="sm" /> : undefined}
+            title={!auth.enabled ? "Cloud sync not set up yet" : auth.user ? (auth.user.email ?? "Signed in") : "Not signed in"}
+            subtitle={
+              !auth.enabled
+                ? "Settings are saved on this device."
+                : auth.user
+                  ? "Settings sync across your devices. Export or delete your data here."
+                  : "Sign in to sync settings across your iPhone and computer."
+            }
+            trailing={auth.user ? <Badge tone="success">Synced</Badge> : undefined}
+            onClick={() => navigate("/account")}
+          />
+        </SectionCard>
+
         <SectionCard title="Profile" subtitle="Used for your greeting. Saved on this device until sign-in arrives (Phase 3).">
           <form
             className="flex items-end gap-2"
@@ -68,6 +88,23 @@ export function SettingsPage() {
               { value: "dark", label: "Dark", icon: Moon },
             ]}
           />
+        </SectionCard>
+
+        <SectionCard title="Home" icon={LayoutDashboard} accent="bg-accent-blue/10 text-accent-blue">
+          <div className="space-y-4">
+            <Switch
+              checked={prefs.demo}
+              onChange={(demo) => {
+                update({ demo });
+                toast({ tone: "info", title: demo ? "Demo mode on" : "Demo mode off", body: demo ? "Home now shows labeled sample data." : "Home shows only your real data." });
+              }}
+              label="Demo mode"
+              description="Preview Home with clearly labeled sample data."
+            />
+            <Button variant="secondary" icon={LayoutDashboard} onClick={() => setCustomizing(true)}>
+              Customize Home sections
+            </Button>
+          </div>
         </SectionCard>
 
         <SectionCard title="Phone tab bar" subtitle={`Choose up to ${MAX_PINS} sections next to Home. Everything else is under "More".`}>
@@ -108,6 +145,9 @@ export function SettingsPage() {
           <p className="pt-2 text-[12px] text-muted">Life Tracker · version {__APP_VERSION__}</p>
         </SectionCard>
       </div>
+      <Sheet open={customizing} onClose={() => setCustomizing(false)} title="Customize Home">
+        <CustomizeDashboard />
+      </Sheet>
     </>
   );
 }

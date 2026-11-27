@@ -11,8 +11,9 @@ and desktop browsers.
 | Phase | State |
 |---|---|
 | 1. Planning & architecture | ✅ Complete |
-| 2. Design system & main interface | ✅ Complete — awaiting approval |
-| 3–12 | Not started |
+| 2. Design system & main interface | ✅ Complete |
+| 3. Home dashboard, sign-in, sync | ✅ Complete — cloud sync waiting for your Supabase project |
+| 4–12 | Not started |
 
 ## Documentation
 - [Architecture](docs/ARCHITECTURE.md) — stack, system design, security, offline, AI
@@ -21,6 +22,7 @@ and desktop browsers.
 - [Design system](docs/DESIGN_SYSTEM.md) — brand, colors, type, motion, components
 - [Roadmap](docs/ROADMAP.md) — the 12 phases and their acceptance criteria
 - [Setup checklist](docs/SETUP_CHECKLIST.md) — accounts and keys, by phase
+- [Set up cloud sync (Supabase)](docs/SETUP_SUPABASE.md) · [Deploy & install on iPhone](docs/DEPLOY.md)
 - [Progress log](PROGRESS.md)
 
 ## Run the preview app
@@ -32,5 +34,6 @@ npm run dev        # http://localhost:5173
 npm run build      # type-check + production build into dist/
 npm run icons      # re-render PNG icons from public/icon.svg
 npm test           # unit tests (incl. color-contrast guard)
-npm run smoke      # end-to-end + accessibility checks on the production build
+npm run smoke      # end-to-end + accessibility + simulated cloud-sync checks
+../../supabase/tests/run_local.sh   # database privacy-rule tests (needs PostgreSQL)
 ```

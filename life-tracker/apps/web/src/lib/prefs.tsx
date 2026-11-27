@@ -1,60 +1,45 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { DEFAULT_PINS, PINNABLE, type SectionId } from "../app/sections";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useAuth } from "./auth";
+import { supabase } from "./supabase";
+import { DEFAULT_PREFS, parsePrefs, pickWinner, prefsToRow, rowToPrefs, type Prefs, type ProfileRow } from "./sync";
+
+export { MAX_PINS, parsePrefs, type Prefs, type ThemePref } from "./sync";
 
 /**
- * Per-device preferences. Until the backend arrives (Phase 3) these live in
- * this browser only; they move to the `profiles` table then.
+ * Preferences: saved on this device instantly, and — when signed in — synced to
+ * the user's profile in Supabase (last-write-wins across devices).
  */
-export type ThemePref = "system" | "light" | "dark";
-
-export interface Prefs {
-  name: string;
-  theme: ThemePref;
-  pins: SectionId[];
-}
 
 const KEY = "lt.prefs";
-const DEFAULTS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS };
-export const MAX_PINS = 3;
+const PENDING_KEY = "lt.prefs.pending";
+const PUSH_DELAY_MS = 600;
 
-/** Validate stored prefs; anything malformed falls back to defaults. */
-export function parsePrefs(json: string | null): Prefs {
+export type SyncStatus = "local" | "syncing" | "synced" | "offline" | "error";
+
+function read(key: string) {
   try {
-    const raw = JSON.parse(json || "{}") as Partial<Prefs>;
-    const pins = Array.isArray(raw.pins)
-      ? raw.pins.filter((p): p is SectionId => PINNABLE.includes(p as SectionId)).slice(0, MAX_PINS)
-      : DEFAULTS.pins;
-    return {
-      name: typeof raw.name === "string" ? raw.name.slice(0, 40) : "",
-      theme: raw.theme === "light" || raw.theme === "dark" ? raw.theme : "system",
-      pins: pins.length ? pins : DEFAULTS.pins,
-    };
+    return localStorage.getItem(key);
   } catch {
-    return DEFAULTS;
+    return null;
   }
 }
-
-function load(): Prefs {
+function write(key: string, value: string | null) {
   try {
-    return parsePrefs(localStorage.getItem(KEY));
-  } catch {
-    return DEFAULTS;
-  }
-}
-
-function save(p: Prefs) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
     /* private mode or blocked storage: keep working in memory */
   }
 }
 
+const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
 interface PrefsCtx {
   prefs: Prefs;
-  update: (patch: Partial<Prefs>) => void;
+  update: (patch: Partial<Omit<Prefs, "updatedAt">>) => void;
   isDark: boolean;
+  sync: { status: SyncStatus; lastSyncedAt?: Date };
+  retrySync: () => void;
 }
 
 const Ctx = createContext<PrefsCtx | null>(null);
@@ -64,9 +49,16 @@ function systemDark() {
 }
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
-  const [prefs, setPrefs] = useState<Prefs>(load);
+  const { user } = useAuth();
+  const [prefs, setPrefs] = useState<Prefs>(() => parsePrefs(read(KEY)));
   const [sysDark, setSysDark] = useState(systemDark);
+  const [sync, setSync] = useState<PrefsCtx["sync"]>({ status: "local" });
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const userId = user?.id ?? null;
+  const timer = useRef<number | undefined>(undefined);
 
+  // ---- theme ----
   useEffect(() => {
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => setSysDark(mq.matches);
@@ -75,23 +67,96 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isDark = prefs.theme === "dark" || (prefs.theme === "system" && sysDark);
-
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", isDark ? "#15120F" : "#FFF8F0");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isDark ? "#15120F" : "#FFF8F0");
   }, [isDark]);
 
-  const update = useCallback((patch: Partial<Prefs>) => {
-    setPrefs((prev) => {
-      const next = { ...prev, ...patch };
-      save(next);
-      return next;
-    });
-  }, []);
+  // ---- cloud sync ----
+  const push = useCallback(async () => {
+    if (!supabase || !userId) return;
+    if (!navigator.onLine) {
+      write(PENDING_KEY, "1");
+      setSync((s) => ({ ...s, status: "offline" }));
+      return;
+    }
+    setSync((s) => ({ ...s, status: "syncing" }));
+    const { error } = await supabase.from("profiles").update(prefsToRow(prefsRef.current, timezone())).eq("id", userId);
+    if (error) {
+      write(PENDING_KEY, "1");
+      setSync((s) => ({ ...s, status: "error" }));
+    } else {
+      write(PENDING_KEY, null);
+      setSync({ status: "synced", lastSyncedAt: new Date() });
+    }
+  }, [userId]);
 
-  const value = useMemo(() => ({ prefs, update, isDark }), [prefs, update, isDark]);
+  const pull = useCallback(async () => {
+    if (!supabase || !userId) return;
+    setSync((s) => ({ ...s, status: "syncing" }));
+    let { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle<ProfileRow>();
+    if (!error && !data) {
+      // Normally created by the sign-up trigger; create it if missing.
+      ({ data, error } = await supabase.from("profiles").insert({ id: userId }).select("*").single<ProfileRow>());
+    }
+    if (error || !data) {
+      setSync((s) => ({ ...s, status: navigator.onLine ? "error" : "offline" }));
+      return;
+    }
+    const remote = rowToPrefs(data);
+    const winner = read(PENDING_KEY) ? "local" : pickWinner(prefsRef.current, remote);
+    if (winner === "remote") {
+      setPrefs(remote);
+      write(KEY, JSON.stringify(remote));
+      setSync({ status: "synced", lastSyncedAt: new Date() });
+    } else if (winner === "local") {
+      await push();
+    } else {
+      setSync({ status: "synced", lastSyncedAt: new Date() });
+    }
+  }, [userId, push]);
+
+  // On sign-in (or app start while signed in): reconcile with the cloud copy.
+  useEffect(() => {
+    if (userId) void pull();
+    else setSync({ status: "local" });
+  }, [userId, pull]);
+
+  // Retry unsent changes when the connection returns or the app comes back to the foreground.
+  useEffect(() => {
+    if (!userId) return;
+    const retry = () => {
+      if (read(PENDING_KEY) && navigator.onLine) void push();
+    };
+    const onVisible = () => document.visibilityState === "visible" && retry();
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [userId, push]);
+
+  const update = useCallback(
+    (patch: Partial<Omit<Prefs, "updatedAt">>) => {
+      setPrefs((prev) => {
+        const next = { ...prev, ...patch, updatedAt: Date.now() };
+        write(KEY, JSON.stringify(next));
+        prefsRef.current = next;
+        return next;
+      });
+      if (userId) {
+        write(PENDING_KEY, "1");
+        window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => void push(), PUSH_DELAY_MS);
+      }
+    },
+    [userId, push],
+  );
+
+  const retrySync = useCallback(() => void pull(), [pull]);
+
+  const value = useMemo(() => ({ prefs, update, isDark, sync, retrySync }), [prefs, update, isDark, sync, retrySync]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -100,3 +165,16 @@ export function usePrefs() {
   if (!v) throw new Error("usePrefs must be used inside <PrefsProvider>");
   return v;
 }
+
+/** Remove everything Life Tracker stored on this device. */
+export function clearDeviceData() {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("lt."))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+export { DEFAULT_PREFS };

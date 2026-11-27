@@ -243,3 +243,7 @@ life-tracker/
 | 2026-11-27 | iOS Shortcuts as the no-cost HealthKit bridge | Lets steps/weight reach the app without a native app (see INTEGRATIONS.md) |
 | 2026-11-27 | No password-based school scraping | PowerSchool / Infinite Campus have no student-authorized API; manual entry and CSV import instead |
 | 2026-11-27 | Read-only OAuth scopes | Makes "never send/delete email" a technical guarantee |
+| 2026-11-27 | Sign-in by emailed 6-digit code (not magic link) | Links open in Safari, not the installed iPhone app; a code works in either |
+| 2026-11-27 | App works signed-out (device-only) | Nothing is blocked on account setup; signing in adds cross-device sync |
+| 2026-11-27 | Preferences sync last-write-wins via `prefs_updated_at` | Simple and predictable for one person on a few devices; new profiles start at 'epoch' so pre-sign-in settings aren't overwritten |
+| 2026-11-27 | Hash routes (`/#/…`) | Works on any static host and inside the PWA with no server rewrite rules |

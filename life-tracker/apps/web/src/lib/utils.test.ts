@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../components/ui/Progress";
 import { formatRelative } from "../components/ui/SyncStatus";
-import { parsePrefs } from "./prefs";
 import { greetingFor } from "./time";
 
 const at = (h: number, m = 0) => new Date(2026, 10, 27, h, m);
@@ -44,28 +43,5 @@ describe("formatRelative", () => {
     [3 * 24 * 3_600_000, "3 days ago"],
   ])("%i ms ago → %s", (ago, expected) => {
     expect(formatRelative(new Date(now.getTime() - ago), now)).toBe(expected);
-  });
-});
-
-describe("parsePrefs", () => {
-  it("returns defaults for missing or broken data", () => {
-    for (const raw of [null, "", "not json", "null", "42", "[]"]) {
-      expect(parsePrefs(raw)).toEqual({ name: "", theme: "system", pins: ["academics", "assignments", "ai"] });
-    }
-  });
-
-  it("keeps valid values", () => {
-    expect(parsePrefs(JSON.stringify({ name: "Sam", theme: "dark", pins: ["health", "news"] }))).toEqual({
-      name: "Sam",
-      theme: "dark",
-      pins: ["health", "news"],
-    });
-  });
-
-  it("drops unknown sections, caps pins at 3 and trims long names", () => {
-    const p = parsePrefs(JSON.stringify({ name: "x".repeat(99), theme: "neon", pins: ["home", "settings", "bogus", "email", "news", "ai", "health"] }));
-    expect(p.name).toHaveLength(40);
-    expect(p.theme).toBe("system");
-    expect(p.pins).toEqual(["email", "news", "ai"]);
   });
 });

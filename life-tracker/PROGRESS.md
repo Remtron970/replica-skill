@@ -69,3 +69,48 @@ app opens and navigates with the network off.
 - Install on iPhone requires the app to be hosted over HTTPS (Phase 3 sets up hosting).
 
 **Next step:** Phase 3 — Supabase project, sign-in, Home dashboard with real data model.
+
+## Phase 3 — Home dashboard, sign-in & sync (2026-11-27)
+**Completed**
+- Database (`supabase/migrations/20261127000000_profiles.sql`): `profiles` with
+  validated preferences, Row Level Security (owner-only), auto-create on sign-up,
+  `updated_at` trigger, `delete_my_account()`.
+- Sign-in with an emailed 6-digit code (`src/lib/auth.tsx`), optional Google
+  button (off until configured), sign out, friendly error messages.
+- Preference sync (`src/lib/prefs.tsx`, `src/lib/sync.ts`): name, theme, phone
+  tabs, Home layout and demo mode follow you across devices; saved locally first,
+  pushed when signed in, retried when back online; last change wins.
+- Account page: status, export my data (JSON), delete account / clear device
+  (typed confirmation).
+- Home: live greeting + clock; stat cards (animated); Today's schedule with
+  current-class indicator, progress, countdown to next class and timeline;
+  Important list (overdue, due soon, important email, new grades, developing
+  news, today's events); Daily briefing card + full view with suggested
+  priorities and an explicit "Unavailable data" list; Customize Home (reorder,
+  hide, reset — synced).
+- Demo mode: labeled sample data generated around the current time, off by
+  default, DEMO badges on every card; live mode never shows invented numbers.
+- Setup guides: `docs/SETUP_SUPABASE.md`, `docs/DEPLOY.md`.
+
+**Verified**
+- Database: 9 checks on local PostgreSQL 16 (`supabase/tests/run_local.sh`) —
+  users see/change only their own profile, invalid values rejected, anonymous
+  access denied, account deletion removes only that user. Mutation-tested: a
+  deliberately broken policy makes the suite fail.
+- Unit: 101 tests (schedule/current-class/next-class incl. weekends, GPA,
+  sync merge rules, demo data, Important ordering, briefing content, contrast).
+- End-to-end: 81 checks, including Home at a fixed time (Biology "happening now"
+  at 50%), customize persists after reload, export/clear data, accessibility
+  scans, and sign-in → sync → delete account against a **simulated** Supabase API.
+
+**Waiting for you**
+- Create the Supabase project (docs/SETUP_SUPABASE.md). Real sign-in emails and
+  cross-device sync have not been tested against a live Supabase project yet.
+- Hosting (docs/DEPLOY.md) is needed to install on iPhone.
+
+**Known issues / notes**
+- Briefing text is template-based (labeled "Preview"); AI-written briefings are Phase 11.
+- GPA here is unweighted on a standard scale; configurable scales and weighted GPA are Phase 4.
+- Stat-card numbers count up when scrolled into view.
+
+**Next step:** Phase 4 — Academics (grade entry, GPA calculator, what-if, Classroom/Canvas framework).
