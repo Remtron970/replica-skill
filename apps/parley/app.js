@@ -489,6 +489,37 @@ for (const s of SUGGESTIONS) {
   els.suggestions.appendChild(b);
 }
 
+// ---------- installable app ----------
+let installPrompt = null;
+const installBtn = $("installApp");
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  installBtn.hidden = false;
+});
+window.addEventListener("appinstalled", () => { installPrompt = null; installBtn.hidden = true; });
+if (!isStandalone() && isIOS) installBtn.hidden = false; // iOS has no install prompt; show instructions
+installBtn.addEventListener("click", async () => {
+  if (installPrompt) {
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") installBtn.hidden = true;
+    installPrompt = null;
+    return;
+  }
+  $("installSteps").textContent = isIOS
+    ? "In Safari, tap the Share button, then “Add to Home Screen”."
+    : "Open your browser's menu and choose “Install app” or “Add to Home screen”.";
+  $("installHelp").showModal();
+});
+if (new URLSearchParams(location.search).has("new")) { state.activeId = null; history.replaceState(null, "", location.pathname); }
+
 applyTheme();
 populateModels();
 renderAll();

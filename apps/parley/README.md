@@ -30,6 +30,28 @@ python3 -m http.server 8000
 To put it online for free, upload the `apps/parley` folder to any static host
 (GitHub Pages, Netlify, Cloudflare Pages or Vercel).
 
+## Install it as an app
+
+Parley is a Progressive Web App (PWA). It gets its own icon and window and works
+offline. It doesn't need an app store. Once it's online (or on `localhost`), you
+can install it:
+
+| Device | How |
+| --- | --- |
+| Windows, Mac, Linux (Chrome or Edge) | Click **Install app** in the sidebar, or the install icon in the address bar |
+| Android (Chrome) | Tap **Install app** in the sidebar, or menu ⋮ and then **Install app** |
+| iPhone or iPad (Safari) | Tap Share, then **Add to Home Screen** (the sidebar button shows these steps) |
+| Mac (Safari) | File, then **Add to Dock** |
+
+Installing needs HTTPS (or `localhost`). Every host listed above gives you
+HTTPS for free. After the first run, the app and the model you chose are
+cached, so Parley opens and chats with no internet connection. Long-pressing or
+right-clicking the icon gives you a **New chat** shortcut.
+
+Want it in the Play Store or App Store later? The same folder can be wrapped
+with [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap) (Play Store)
+or [Capacitor](https://capacitorjs.com) (both stores).
+
 ## Two free engines
 
 **1. In-browser (default).** Uses [WebLLM](https://github.com/mlc-ai/web-llm)
@@ -54,7 +76,10 @@ with `OLLAMA_ORIGINS=https://your-site.example ollama serve`.
 ```
 index.html   layout
 styles.css   design tokens (light and dark) and components
-app.js       storage, engines (WebLLM, Ollama), streaming, UI
+app.js       storage, engines (WebLLM, Ollama), streaming, UI, install button
+manifest.webmanifest   app name, icons, colours, shortcut
+sw.js        service worker: offline app shell + cached engine script
+icons/       app icon (SVG source + PNGs, including maskable and Apple touch)
 vendor/      marked (Markdown) and DOMPurify (HTML sanitizer), MIT and Apache-2.0
 ```
 
