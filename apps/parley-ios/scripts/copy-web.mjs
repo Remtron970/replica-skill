@@ -8,7 +8,7 @@ const src = join(here, "..", "..", "parley");
 const out = join(here, "..", "www");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-for (const f of ["index.html", "styles.css", "app.js", "manifest.webmanifest", "sw.js", "icons", "vendor"]) {
+for (const f of ["index.html", "styles.css", "app.js", "create.js", "manifest.webmanifest", "sw.js", "icons", "vendor"]) {
   cpSync(join(src, f), join(out, f), { recursive: true });
 }
 console.log("Copied web app to", out);

@@ -1,6 +1,10 @@
 # App Store Connect: App Privacy answers
 
-- **Data collection:** "No, we do not collect data from this app."
+- **Data collection:** The developer collects nothing. The optional Create tab
+  sends the person's prompt and any photo they pick to fal.ai, a third-party
+  service they connect with their own key. To be safe, declare in App Store Connect:
+  **User Content → Photos or Videos** and **User Content → Other User Content**,
+  used for **App Functionality**, **not linked** to identity, **not used for tracking**.
   Optional accounts (username, display name, salted password hash), chats and settings are stored only on the device (WebView local storage and
   IndexedDB). Nothing is sent to the developer or any third party.
 - **Network requests the app makes:** model files are downloaded from public CDNs
