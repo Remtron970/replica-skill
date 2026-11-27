@@ -1,25 +1,36 @@
-import { StrictMode } from "react";
+import { MotionConfig } from "motion/react";
+import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { Link, RouterProvider, createBrowserRouter, createHashRouter, type RouteObject } from "react-router-dom";
 import { SECTIONS } from "./app/sections";
 import { AppShell } from "./components/AppShell";
-import { PageTransition } from "./components/ui";
+import { SkeletonCard, ToastProvider } from "./components/ui";
 import { HomePage } from "./features/home/HomePage";
 import { SectionPage } from "./features/section/SectionPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { PrefsProvider } from "./lib/prefs";
 import "./styles.css";
 
+// Heavier screens (charts) load on first visit so the app opens fast.
+const DesignPage = lazy(() => import("./features/design/DesignPage").then((m) => ({ default: m.DesignPage })));
+
+function PageLoading() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <SkeletonCard />
+      <SkeletonCard />
+    </div>
+  );
+}
+
 function NotFound() {
   return (
-    <PageTransition>
-      <div className="py-20 text-center">
-        <h1 className="text-[24px] font-bold">Page not found</h1>
-        <Link to="/" className="mt-3 inline-block font-semibold text-brand">
-          Back to Home
-        </Link>
-      </div>
-    </PageTransition>
+    <div className="py-20 text-center">
+      <h1 className="text-[24px] font-bold">Page not found</h1>
+      <Link to="/" className="mt-3 inline-block font-semibold text-brand-ink">
+        Back to Home
+      </Link>
+    </div>
   );
 }
 
@@ -30,6 +41,14 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: "settings", element: <SettingsPage /> },
+      {
+        path: "design",
+        element: (
+          <Suspense fallback={<PageLoading />}>
+            <DesignPage />
+          </Suspense>
+        ),
+      },
       ...SECTIONS.filter((s) => s.id !== "home" && s.id !== "settings").map((s) => ({
         path: s.path.slice(1),
         element: <SectionPage section={s} />,
@@ -41,13 +60,17 @@ const routes: RouteObject[] = [
 
 // Hash URLs (/#/academics) work on any static host with no server rewrites;
 // set VITE_ROUTER=browser once hosting is configured for clean URLs.
-const router =
-  import.meta.env.VITE_ROUTER === "browser" ? createBrowserRouter(routes) : createHashRouter(routes);
+const router = import.meta.env.VITE_ROUTER === "browser" ? createBrowserRouter(routes) : createHashRouter(routes);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PrefsProvider>
-      <RouterProvider router={router} />
-    </PrefsProvider>
+    {/* reducedMotion="user": honors the iPhone's Reduce Motion setting everywhere. */}
+    <MotionConfig reducedMotion="user">
+      <PrefsProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </PrefsProvider>
+    </MotionConfig>
   </StrictMode>,
 );

@@ -10,9 +10,9 @@ and desktop browsers.
 
 | Phase | State |
 |---|---|
-| 1. Planning & architecture | ✅ Complete — awaiting approval |
-| Preview app (`apps/web`) | ✅ Runs: navigation for all 11 sections, Home with live greeting/clock, Settings (name, theme, phone tabs), app icon |
-| 2–12 | Not started |
+| 1. Planning & architecture | ✅ Complete |
+| 2. Design system & main interface | ✅ Complete — awaiting approval |
+| 3–12 | Not started |
 
 ## Documentation
 - [Architecture](docs/ARCHITECTURE.md) — stack, system design, security, offline, AI
@@ -31,4 +31,6 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # type-check + production build into dist/
 npm run icons      # re-render PNG icons from public/icon.svg
+npm test           # unit tests (incl. color-contrast guard)
+npm run smoke      # end-to-end + accessibility checks on the production build
 ```

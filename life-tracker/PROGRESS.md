@@ -34,3 +34,38 @@ navigate, settings persist across reload, no console errors, no horizontal
 scroll on phone.
 
 **Not yet:** backend, sign-in, real data, service worker/offline, push — per roadmap.
+
+## Phase 2 — Design system & main interface (2026-11-27)
+**Completed**
+- Component library in `src/components/ui/`: Button, IconButton, Spinner, Card,
+  IconChip, SectionCard (with source/sync footer + DEMO badge), Badge, Chip,
+  TextField, Select, Switch, SegmentedControl, Dialog, Sheet (focus trap,
+  Escape, drag-to-dismiss), Toast notifications, EmptyState, ErrorState,
+  Skeleton/SkeletonCard, ListRow, ProgressBar, ProgressRing, AnimatedNumber,
+  Countdown, SyncStatus, PageHeader/SectionTitle.
+- Charts in `src/components/charts/`: TrendChart (line/area), BarSeries, Donut —
+  themed by tokens, animated, with screen-reader summaries.
+- Motion system (`src/lib/motion.ts`): shared springs, page transitions with
+  exit animation, stagger; honors iPhone "Reduce Motion".
+- Accessibility: contrast-safe token set (brand-ink / brand-strong), skip link,
+  focus rings, labeled landmarks, focus-trapped overlays.
+- PWA: service worker (offline app shell), generated manifest, update prompt,
+  install helper (iPhone steps / Chrome-Edge install button), self-hosted Inter.
+- Living design-system gallery (`/#/design`), linked from Settings.
+- Home and section screens rebuilt on the new components.
+
+**Verified**: `npm test` 78 unit tests pass (incl. WCAG contrast for every token
+pair, both themes); `npm run smoke` 46 checks pass — all routes on iPhone + desktop,
+axe-core WCAG 2.1 AA scan with zero serious/critical issues in light and dark,
+navigation, settings persistence, dialog focus/Escape, toasts, service worker,
+app opens and navigates with the network off.
+
+**Known issues / notes**
+- Main JS bundle is ~535 kB (173 kB gzipped); charts load separately. Will be
+  revisited when real screens are added.
+- "Ready to work offline" toast appears once on first visit.
+- Lighthouse itself wasn't run; axe-core covers the accessibility checks and the
+  smoke test covers installability/offline directly.
+- Install on iPhone requires the app to be hosted over HTTPS (Phase 3 sets up hosting).
+
+**Next step:** Phase 3 — Supabase project, sign-in, Home dashboard with real data model.

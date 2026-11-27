@@ -18,9 +18,10 @@ const KEY = "lt.prefs";
 const DEFAULTS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS };
 export const MAX_PINS = 3;
 
-function load(): Prefs {
+/** Validate stored prefs; anything malformed falls back to defaults. */
+export function parsePrefs(json: string | null): Prefs {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "{}") as Partial<Prefs>;
+    const raw = JSON.parse(json || "{}") as Partial<Prefs>;
     const pins = Array.isArray(raw.pins)
       ? raw.pins.filter((p): p is SectionId => PINNABLE.includes(p as SectionId)).slice(0, MAX_PINS)
       : DEFAULTS.pins;
@@ -29,6 +30,14 @@ function load(): Prefs {
       theme: raw.theme === "light" || raw.theme === "dark" ? raw.theme : "system",
       pins: pins.length ? pins : DEFAULTS.pins,
     };
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+function load(): Prefs {
+  try {
+    return parsePrefs(localStorage.getItem(KEY));
   } catch {
     return DEFAULTS;
   }

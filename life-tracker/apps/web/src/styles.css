@@ -1,52 +1,94 @@
+@import "@fontsource-variable/inter";
 @import "tailwindcss";
 
-/* Dark mode is driven by a `.dark` class on <html> (set from Settings → Theme). */
+/* Dark mode is driven by a `.dark` class on <html> (Settings → Appearance). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---- Design tokens (see docs/DESIGN_SYSTEM.md) ---- */
+/*
+ * ---- Design tokens (docs/DESIGN_SYSTEM.md) ----
+ * Contrast rules (WCAG 2.1 AA, enforced by src/design/tokens.test.ts):
+ *   --brand        decorative fills, icons beside a text label, chart series
+ *   --brand-ink    orange TEXT (links, active labels)        ≥ 4.5:1 on bg/surface/brand-soft
+ *   --brand-strong solid button fill, paired with --on-brand  ≥ 4.5:1
+ *   --accent-*     icons + status text                        ≥ 4.5:1 on surface
+ */
 :root {
   --brand: #ff7a1a;
   --brand-deep: #c2541a;
+  --brand-ink: #a8430b;
+  --brand-strong: #c24e0c;
+  --on-brand: #ffffff;
   --brand-soft: #ffe7d2;
+  --hero-from: #c64f0b;
+  --hero-to: #a3400b;
+
   --bg: #fff8f0;
   --surface: #ffffff;
   --surface-2: #fff1e3;
   --text: #2b2b2b;
   --text-muted: #6b6560;
   --border: #f0e4d7;
+  --scrim: rgb(20 10 0 / 0.38);
   --shadow: 0 1px 2px rgb(60 30 0 / 0.06), 0 8px 24px rgb(60 30 0 / 0.06);
+  --shadow-lg: 0 2px 6px rgb(60 30 0 / 0.08), 0 24px 48px rgb(60 30 0 / 0.14);
 
-  --accent-blue: #3b82f6;
-  --accent-purple: #8b5cf6;
-  --accent-green: #22c55e;
-  --accent-yellow: #f5b300;
-  --accent-red: #ef4444;
+  --accent-blue: #2152d9;
+  --accent-purple: #7c3aed;
+  --accent-green: #15703a;
+  --accent-yellow: #92500a;
+  --accent-red: #c81e1e;
+
+  /* Brighter series colors for charts (graphics need 3:1, not 4.5:1). */
+  --chart-1: #ff7a1a;
+  --chart-2: #3b82f6;
+  --chart-3: #8b5cf6;
+  --chart-4: #22c55e;
+  --chart-5: #f5b300;
+  --chart-grid: #f0e4d7;
 }
 
 .dark {
   --brand: #ff8a33;
   --brand-deep: #e0662a;
+  --brand-ink: #ff9a4d;
+  --brand-strong: #ff8a33;
+  --on-brand: #1a1208;
   --brand-soft: #3a2616;
+  --hero-from: #c2541a;
+  --hero-to: #7a3110;
+
   --bg: #15120f;
   --surface: #1f1b17;
   --surface-2: #2a241f;
   --text: #f5efe8;
   --text-muted: #a89f96;
   --border: #3a322b;
+  --scrim: rgb(0 0 0 / 0.55);
   --shadow: 0 0 0 1px var(--border);
+  --shadow-lg: 0 0 0 1px var(--border), 0 24px 48px rgb(0 0 0 / 0.5);
 
   --accent-blue: #60a5fa;
   --accent-purple: #a78bfa;
   --accent-green: #4ade80;
   --accent-yellow: #fcd34d;
   --accent-red: #f87171;
+
+  --chart-1: #ff8a33;
+  --chart-2: #60a5fa;
+  --chart-3: #a78bfa;
+  --chart-4: #4ade80;
+  --chart-5: #fcd34d;
+  --chart-grid: #3a322b;
 }
 
 @theme inline {
-  --font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 
   --color-brand: var(--brand);
   --color-brand-deep: var(--brand-deep);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-strong: var(--brand-strong);
+  --color-on-brand: var(--on-brand);
   --color-brand-soft: var(--brand-soft);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -54,6 +96,7 @@
   --color-ink: var(--text);
   --color-muted: var(--text-muted);
   --color-line: var(--border);
+  --color-scrim: var(--scrim);
 
   --color-accent-blue: var(--accent-blue);
   --color-accent-purple: var(--accent-purple);
@@ -62,7 +105,14 @@
   --color-accent-red: var(--accent-red);
 
   --shadow-card: var(--shadow);
-  --radius-card: 20px;
+  --shadow-pop: var(--shadow-lg);
+
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 html,
@@ -71,15 +121,23 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
+  overscroll-behavior-y: none;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
 }
 
 /* Respect the iPhone home indicator and notch. */
@@ -91,7 +149,12 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
-  border-radius: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
 }
