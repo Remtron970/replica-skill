@@ -10,7 +10,6 @@ import { SchoolConnections } from "./SchoolConnections";
 import { MAX_PINS, usePrefs, type ThemePref } from "../../lib/prefs";
 
 const COMING = [
-  ["Health permissions", 7],
   ["Location for local news", 8],
   ["Calendar connections", 9],
   ["AI privacy controls", 10],

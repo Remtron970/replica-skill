@@ -78,7 +78,7 @@ export interface HomeData {
   events: CalEvent[];
   gradeUpdates: GradeUpdate[];
   news: NewsItem[];
-  steps?: { today: number; week: number };
+  steps?: { today: number | null; week: number };
   tasks?: { done: number; total: number };
   /** GPA and average, computed with the user's own grading settings. */
   grades?: { gpa: number | null; average: number | null };
@@ -100,6 +100,8 @@ export interface LiveInputs {
   assignments?: StoredAssignment[];
   courseNames?: Map<string, string>;
   emails?: EmailRecord[];
+  /** Steps from Health (Apple Health via the Shortcut, or typed in). */
+  steps?: { today: number | null; week: number; hasData: boolean };
 }
 
 /** Due time for an assignment (date-only due dates count as 11:59 PM that day). */
@@ -130,7 +132,7 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     : [];
   return {
     mode: "live",
-    connected: { ...NONE, grades: hasGrades, school: hasSchool, email: mail.length > 0 },
+    connected: { ...NONE, grades: hasGrades, school: hasSchool, email: mail.length > 0, health: !!input?.steps?.hasData },
     courses: hasGrades ? input!.summaries.filter((s) => s.result.percent !== null).map((s) => ({ id: s.course.id, name: s.course.name, teacher: s.course.teacher, percent: s.result.percent as number, credits: s.course.credits })) : [],
     schedule: [],
     scheduleFor: hasSchedule ? input!.schedule!.forDay : undefined,
@@ -151,6 +153,7 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     events: [],
     gradeUpdates,
     news: [],
+    steps: input?.steps?.hasData ? { today: input.steps.today, week: input.steps.week } : undefined,
     grades: hasGrades ? { gpa: input!.gpa, average: input!.average } : undefined,
   };
 }
@@ -252,7 +255,7 @@ export function computeStats(d: HomeData, now: Date): Stats {
     average: d.connected.grades ? (d.grades ? (d.grades.average ?? undefined) : averagePercent(d.courses)) : undefined,
     assignmentsDue: d.connected.school ? d.assignments.filter((a) => !a.done && a.dueAt.getTime() >= t && a.dueAt.getTime() - t <= 7 * DAY).length : undefined,
     unreadEmails: d.connected.email ? d.emails.filter((e) => e.unread).length : undefined,
-    stepsToday: d.connected.health ? d.steps?.today : undefined,
+    stepsToday: d.connected.health ? (d.steps?.today ?? undefined) : undefined,
     tasksDone: d.connected.tasks ? d.tasks : undefined,
     upcomingEvents: d.connected.calendar ? d.events.filter((e) => e.startsAt.getTime() >= t && e.startsAt.getTime() - t <= 7 * DAY).length : undefined,
   };
@@ -388,7 +391,7 @@ export function buildBriefing(d: HomeData, now: Date): Briefing {
 
   if (d.connected.health && d.steps) {
     summary.push(`You've taken ${d.steps.week.toLocaleString()} steps so far this week.`);
-    sections.push({ title: "Activity", lines: [`${d.steps.today.toLocaleString()} steps today`, `${d.steps.week.toLocaleString()} steps this week`] });
+    sections.push({ title: "Activity", lines: [d.steps.today === null ? "No steps recorded today yet" : `${d.steps.today.toLocaleString()} steps today`, `${d.steps.week.toLocaleString()} steps this week`] });
   }
 
   if (d.connected.news) {

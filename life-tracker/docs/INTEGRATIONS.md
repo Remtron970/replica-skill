@@ -100,7 +100,7 @@ native iOS app with the HealthKit entitlement can. Two routes:
 
 | Route | Cost / requirements | Experience |
 |---|---|---|
-| **A. iOS Shortcuts bridge** (recommended first) | Free; iPhone only | A Shortcut we provide reads today's steps, distance, active energy, exercise minutes and (optionally) weight, then POSTs them to `health-ingest` with your personal ingest token. A daily Personal Automation (e.g. 9 PM, "Run Immediately") plus manual runs any time. |
+| **A. iOS Shortcuts bridge** ✅ built (Phase 7, setup: [SETUP_HEALTH.md](SETUP_HEALTH.md)) | Free; iPhone only | A Shortcut we provide reads today's steps, distance, active energy, exercise minutes and (optionally) weight, then POSTs them to `health-ingest` with your personal ingest token. A daily Personal Automation (e.g. 9 PM, "Run Immediately") plus manual runs any time. |
 | **B. Native Capacitor app** | Mac with Xcode + **Apple Developer Program ($99/yr)**; free provisioning profiles expire every 7 days | Standard Health permission sheet; syncs whenever you open the app; history backfill |
 
 Health data is shown neutrally (no judgments, no calorie-shaming), stored only

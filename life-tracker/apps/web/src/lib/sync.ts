@@ -47,6 +47,23 @@ export function normalizeEmailSettings(raw: unknown): EmailSettings {
   return { ai: r.ai !== false, retentionDays: [7, 14, 30, 60].includes(r.retentionDays as number) ? (r.retentionDays as EmailSettings["retentionDays"]) : 30 };
 }
 
+/** Health settings (synced). Weight tracking is off unless you turn it on. */
+export interface HealthSettings {
+  units: "imperial" | "metric";
+  stepGoal: number;
+  trackWeight: boolean;
+}
+export const DEFAULT_HEALTH_SETTINGS: HealthSettings = { units: "imperial", stepGoal: 8000, trackWeight: false };
+export function normalizeHealthSettings(raw: unknown): HealthSettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<HealthSettings>;
+  const g = Number(r.stepGoal);
+  return {
+    units: r.units === "metric" ? "metric" : "imperial",
+    stepGoal: Number.isFinite(g) && g >= 500 && g <= 100000 ? Math.round(g) : DEFAULT_HEALTH_SETTINGS.stepGoal,
+    trackWeight: r.trackWeight === true,
+  };
+}
+
 export interface Prefs {
   name: string;
   theme: ThemePref;
@@ -56,6 +73,7 @@ export interface Prefs {
   academic: AcademicSettings;
   schedule: ScheduleSettings;
   email: EmailSettings;
+  health: HealthSettings;
   /** ms since epoch of the last change on any device; 0 = never changed. */
   updatedAt: number;
 }
@@ -68,7 +86,7 @@ export const DASHBOARD_SECTIONS: { id: DashboardSectionId; label: string }[] = [
   { id: "important", label: "Important" },
 ];
 export const DEFAULT_DASHBOARD: DashboardItem[] = DASHBOARD_SECTIONS.map((s) => ({ id: s.id, visible: true }));
-export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, email: DEFAULT_EMAIL_SETTINGS, updatedAt: 0 };
+export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, email: DEFAULT_EMAIL_SETTINGS, health: DEFAULT_HEALTH_SETTINGS, updatedAt: 0 };
 
 /** Keep known sections in the saved order, drop junk/duplicates, append any new sections. */
 export function normalizeDashboard(raw: unknown): DashboardItem[] {
@@ -104,6 +122,7 @@ export function parsePrefs(json: string | null): Prefs {
       academic: normalizeAcademic(raw.academic),
       schedule: normalizeScheduleSettings(raw.schedule),
       email: normalizeEmailSettings(raw.email),
+      health: normalizeHealthSettings(raw.health),
       updatedAt: typeof raw.updatedAt === "number" && raw.updatedAt > 0 ? raw.updatedAt : 0,
     };
   } catch {
@@ -123,6 +142,7 @@ export interface ProfileRow {
   academic_settings?: unknown;
   schedule_settings?: unknown;
   email_settings?: unknown;
+  health_settings?: unknown;
   prefs_updated_at: string;
 }
 
@@ -137,6 +157,7 @@ export function rowToPrefs(row: ProfileRow): Prefs {
     academic: normalizeAcademic(row.academic_settings),
     schedule: normalizeScheduleSettings(row.schedule_settings),
     email: normalizeEmailSettings(row.email_settings),
+    health: normalizeHealthSettings(row.health_settings),
     updatedAt: Number.isFinite(t) && t > 0 ? t : 0,
   };
 }
@@ -152,6 +173,7 @@ export function prefsToRow(p: Prefs, timezone: string): Omit<ProfileRow, "id"> {
     academic_settings: p.academic,
     schedule_settings: p.schedule,
     email_settings: p.email,
+    health_settings: p.health,
     prefs_updated_at: new Date(p.updatedAt || 0).toISOString(),
   };
 }

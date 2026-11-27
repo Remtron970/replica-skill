@@ -4,8 +4,9 @@
 > `academic_settings`), `terms`, `grading_scales`, `courses`,
 > `grade_categories`, `grade_items`, `past_courses`, `integrations`,
 > `integration_tokens`, `sync_runs`, `day_types`, `schedule_blocks`,
-> `schedule_exceptions`, `assignments`, `emails` (and `profiles.schedule_settings`,
-> `profiles.email_settings`). The rest of this document is the plan for
+> `schedule_exceptions`, `assignments`, `emails`, `health_daily`, `weight_entries`,
+> `health_ingest_tokens` (and `profiles.schedule_settings`, `profiles.email_settings`,
+> `profiles.health_settings`). The rest of this document is the plan for
 > later phases.
 >
 > **Sync model** (all synced tables): `id` is created on the device so records
@@ -81,8 +82,9 @@ unweighted = Σ(points×credits)/Σcredits; weighted adds `weight_bonus`
 ## Health
 | Table | Key columns |
 |---|---|
-| `health_daily` | user_id, day date, steps, walk_run_distance_m, running_distance_m, active_energy_kcal, exercise_minutes, source — unique (user_id, day, source) |
-| `weight_entries` | user_id, measured_at, weight_kg, source |
+| `health_daily` | user_id, day date, steps, distance_km, active_energy_kcal, exercise_minutes, source (`shortcut`/`manual`); the Shortcut keeps one row per day (`external_id = shortcut:YYYY-MM-DD`), typed entries another; the app prefers Shortcut values per metric. Range checks reject impossible values. |
+| `weight_entries` | user_id, measured_at, weight_kg (20–400), source — shown only if the user turns weight on |
+| `health_ingest_tokens` | user_id, token_hash (SHA-256 of the Shortcut key), created_at, last_used_at — the key itself is never stored; users can see and delete their row, never read the hash |
 
 ## News
 | Table | Key columns |

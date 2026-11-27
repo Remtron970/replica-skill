@@ -62,12 +62,13 @@ async function settle(page, ms = 500) {
 // exercise sign-in, profile sync and account deletion end to end.
 // ---------------------------------------------------------------------------
 const SB = "https://test-project.supabase.co";
-const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments", "emails"];
+const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments", "emails", "health_daily", "weight_entries"];
 async function cloudChecks() {
   const USER = { id: "8b0f7a52-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "remy@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
   const calls = [];
   const tables = {};
   const integrations = [];
+  const healthKeys = [];
   let tick = 0;
   let row = {
     id: USER.id,
@@ -109,6 +110,15 @@ async function cloudChecks() {
       const rows = provider ? integrations.filter((r) => r.provider === provider) : integrations;
       if ((req.headers()["accept"] || "").includes("vnd.pgrst.object")) return rows.length ? json(200, rows[0]) : json(406, { code: "PGRST116", message: "no rows" });
       return json(200, rows);
+    }
+    if (u.pathname === "/rest/v1/health_ingest_tokens" && req.method() === "GET") {
+      if ((req.headers()["accept"] || "").includes("vnd.pgrst.object")) return healthKeys.length ? json(200, healthKeys[0]) : json(406, { code: "PGRST116", message: "no rows" });
+      return json(200, healthKeys);
+    }
+    if (u.pathname === "/functions/v1/health-token") {
+      if (body?.revoke) return (healthKeys.length = 0), json(200, { ok: true, revoked: true });
+      healthKeys.splice(0, healthKeys.length, { id: "hk1", created_at: new Date().toISOString(), last_used_at: null });
+      return json(200, { ok: true, key: "lth_TESTKEY0000000000000000000000000000000000000", url: "https://test.supabase.co/functions/v1/health-ingest" });
     }
     if (u.pathname === "/functions/v1/email-sync") return json(200, { ok: true, added: 0, updated: 0, expired: 0 });
     if (u.pathname === "/functions/v1/email-summarize")
@@ -254,6 +264,34 @@ async function cloudChecks() {
   ok(await c.getByRole("dialog").getByText("Coach moved practice to 4 PM Thursday.").isVisible(), "signed in: pasted emails get the server's AI summary");
   if (SHOTS) await c.screenshot({ path: `${SHOTS}/phone-email-cloud.png` });
   await c.keyboard.press("Escape");
+
+  // Health: make a Shortcut key, then rows arrive as the health-ingest function writes them.
+  await c.goto(`${CURL}#/health`);
+  await settle(c, 1200);
+  await c.getByRole("button", { name: "Connect Apple Health" }).click();
+  const hd = c.getByRole("dialog");
+  await hd.getByRole("button", { name: "Make my key" }).click();
+  await settle(c, 600);
+  ok(calls.some((x) => x.path === "/functions/v1/health-token" && x.auth === "Bearer test-access"), "Health: key is made by the server for the signed-in user");
+  ok((await hd.innerText()).includes("Bearer lth_TESTKEY") && (await hd.innerText()).includes("/functions/v1/health-ingest"), "Health: key and address are shown once to copy into the Shortcut");
+  ok((await hd.innerText()).includes("Run Immediately"), "Health: guide explains the daily automation");
+  const hv = await axe(c);
+  ok(hv.length === 0, `Health connect sheet passes axe${hv.length ? ": " + hv.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+  await c.keyboard.press("Escape");
+  const localDay = (n) => { const d = new Date(Date.now() - n * 86_400_000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const hr = (n, o) => ({ id: `7c1d0000-0000-4000-8000-00000000000${n}`, user_id: USER.id, client_updated_at: new Date().toISOString(), updated_at: new Date(Date.now() + ++tick).toISOString(), deleted: false, source: "shortcut", external_id: `shortcut:${localDay(n)}`, day: localDay(n), steps: null, distance_km: null, active_energy_kcal: null, exercise_minutes: null, ...o });
+  tables.health_daily = new Map([hr(0, { steps: 9120, distance_km: "6.437", active_energy_kcal: "410.5", exercise_minutes: 32 }), hr(1, { steps: 4300 })].map((r) => [r.id, r]));
+  healthKeys[0].last_used_at = new Date().toISOString();
+  await c.reload();
+  await settle(c, 2500);
+  const hm = await c.locator("main").innerText();
+  ok(hm.includes("Receiving") && hm.includes("9,120") && hm.includes("From Apple Health"), "Health: Shortcut data appears with its source");
+  ok(hm.includes("4.0 mi") && hm.includes("411 kcal") && hm.includes("32 min"), "Health: distance in miles, energy and exercise shown");
+  ok((await c.locator("figure[role=img]").count()) >= 1, "Health: steps chart renders");
+  if (SHOTS) await c.screenshot({ path: `${SHOTS}/phone-health-cloud.png`, fullPage: true });
+  await c.goto(CURL);
+  await settle(c, 1000);
+  ok((await c.locator("main").innerText()).includes("9,120"), "Home: steps today from Apple Health");
 
   await c.goto(`${CURL}#/account`);
   await settle(c, 500);
@@ -689,6 +727,51 @@ try {
     await m.goto(URL);
     await settle(m, 800);
     ok((await m.getByRole("region", { name: "Important" }).innerText()).includes("Field trip form"), "Home: important email in Important");
+    await ctx.close();
+  }
+
+  console.log("\nHealth (no cloud): manual entry, charts, settings");
+  {
+    const ctx = await browser.newContext({ ...devices["iPhone 15"] });
+    const m = await ctx.newPage();
+    watch(m, "health");
+    await m.goto(`${URL}#/health`);
+    await settle(m);
+    ok(await m.getByText("Bring in your activity").isVisible() && (await m.getByRole("button", { name: "Set up cloud sync to connect Apple Health" }).isVisible()), "explains the Shortcut needs cloud sync, offers manual entry");
+    await m.getByRole("button", { name: "Enter by hand" }).click();
+    const d = m.getByRole("dialog");
+    await d.getByRole("button", { name: "Save" }).click();
+    ok(await d.getByText("Enter at least one number.").isVisible(), "empty entry is refused");
+    await d.getByLabel("Steps").fill("250000");
+    await d.getByRole("button", { name: "Save" }).click();
+    ok(await d.getByText("Steps doesn't look right. Check the number.").isVisible(), "impossible values are refused");
+    await d.getByLabel("Steps").fill("6,400");
+    await d.getByLabel("Distance (mi)").fill("2.5");
+    await d.getByLabel("Exercise (min)").fill("25");
+    const va = await axe(m);
+    ok(va.length === 0, `entry sheet passes axe${va.length ? ": " + va.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    await d.getByRole("button", { name: "Save" }).click();
+    await settle(m, 600);
+    const main = await m.locator("main").innerText();
+    ok(main.includes("6,400") && main.includes("Entered by hand") && main.includes("2.5 mi") && main.includes("25 min"), "typed numbers show on the dashboard, labeled as typed");
+    ok(main.includes("Last 7 days") && (await m.locator("figure[role=img]").count()) >= 1, "weekly chart renders");
+    await m.getByRole("radio", { name: "Month" }).click();
+    await m.getByRole("button", { name: "Exercise" }).click();
+    await settle(m, 400);
+    ok((await m.locator("main").innerText()).includes("Last 30 days") && (await m.locator("main").innerText()).includes("Exercise: 25 min total"), "month view and metric switch");
+    ok(!(await m.locator("main").innerText()).includes("Weight"), "weight is hidden unless turned on");
+    await m.getByRole("button", { name: "Health settings" }).click();
+    await m.getByRole("dialog").getByRole("switch", { name: "Show weight" }).click();
+    await m.keyboard.press("Escape");
+    await settle(m, 300);
+    ok((await m.locator("main").innerText()).includes("No weight entries yet"), "weight appears only after opting in");
+    const ve = await axe(m);
+    ok(ve.length === 0, `Health page passes axe${ve.length ? ": " + ve.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (ve.length) for (const x of ve) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    if (SHOTS) await m.screenshot({ path: `${SHOTS}/phone-health.png`, fullPage: true });
+    await m.goto(URL);
+    await settle(m, 800);
+    ok((await m.locator("main").innerText()).includes("6,400"), "Home: steps today from typed entry");
     await ctx.close();
   }
 

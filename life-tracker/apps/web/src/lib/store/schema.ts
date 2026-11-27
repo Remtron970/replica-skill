@@ -1,6 +1,7 @@
 import type { Course, GradeCategory, GradeItem, GradingScale, PastCourse, Term } from "../../features/academics/types";
 import type { Assignment } from "../../features/assignments/types";
 import type { EmailRecord } from "../../features/email/types";
+import type { HealthDay, WeightEntry } from "../../features/health/types";
 import type { DayType, ScheduleBlock, ScheduleException } from "../../features/schedule/blockSchedule";
 import { Collection, type Source, type SyncRecord } from "./collection";
 import type { CollectionBinding } from "./engine";
@@ -65,6 +66,8 @@ export const store = {
   exceptions: new Collection<ScheduleException>("schedule_exceptions"),
   assignments: new Collection<Assignment>("assignments"),
   emails: new Collection<EmailRecord>("emails"),
+  health: new Collection<HealthDay>("health_daily"),
+  weights: new Collection<WeightEntry>("weight_entries"),
 };
 
 export const bindings = [
@@ -133,6 +136,8 @@ export const bindings = [
     webUrl: "web_url",
     dismissed: "dismissed",
   }, ["importance"]),
+  binding(store.health, "health_daily", { day: "day", steps: "steps", distanceKm: "distance_km", activeEnergyKcal: "active_energy_kcal", exerciseMinutes: "exercise_minutes" }, ["steps", "distanceKm", "activeEnergyKcal", "exerciseMinutes"]),
+  binding(store.weights, "weight_entries", { measuredAt: "measured_at", weightKg: "weight_kg" }, ["weightKg"]),
 ] as unknown as CollectionBinding<SyncRecord>[];
 
 export const allCollections = Object.values(store) as Collection<SyncRecord>[];

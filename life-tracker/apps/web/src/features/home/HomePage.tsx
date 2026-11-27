@@ -43,6 +43,9 @@ import { useSchedule } from "../schedule/useSchedule";
 import { store } from "../../lib/store/schema";
 import { useCollection } from "../../lib/store/StoreProvider";
 import { CustomizeDashboard } from "./CustomizeDashboard";
+import { localDate } from "../academics/grades";
+import { mergeDays, summarize, thisWeek } from "../health/stats";
+import type { HealthDay } from "../health/types";
 import {
   buildBriefing,
   computeStats,
@@ -53,6 +56,11 @@ import {
   type ImportantKind,
 } from "./homeData";
 
+function stepsFor(rows: HealthDay[], now: Date) {
+  const merged = mergeDays(rows);
+  return { today: merged.get(localDate(now))?.steps ?? null, week: summarize(thisWeek(merged, now), "steps").total, hasData: merged.size > 0 };
+}
+
 export function HomePage() {
   const { prefs, update } = usePrefs();
   const now = useNow(15_000); // data refresh; the clock and countdowns tick on their own
@@ -60,6 +68,7 @@ export function HomePage() {
   const schedule = useSchedule();
   const assignments = useCollection(store.assignments);
   const emails = useCollection(store.emails);
+  const healthRows = useCollection(store.health);
   const data = useMemo(
     () =>
       prefs.demo
@@ -74,10 +83,11 @@ export function HomePage() {
               assignments,
               courseNames: new Map(academics.allCourses.map((c) => [c.id, c.name])),
               emails,
+              steps: stepsFor(healthRows, now),
             },
             now,
           ),
-    [prefs.demo, now, academics, schedule, assignments, emails],
+    [prefs.demo, now, academics, schedule, assignments, emails, healthRows],
   );
   const [customizing, setCustomizing] = useState(false);
 

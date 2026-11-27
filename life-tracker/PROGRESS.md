@@ -253,3 +253,39 @@ You chose: **school email**, plus a **paste** fallback in case the school blocks
   key or Google project exists yet. See docs/SETUP_EMAIL.md.
 
 **Next step:** Phase 7 — Health.
+
+## Phase 7 — Health (2026-11-27)
+You chose the **iPhone Shortcut** route (no Mac, so no native HealthKit app).
+
+**Completed**
+- Database: `health_daily`, `weight_entries` (synced, private, range-checked),
+  `health_ingest_tokens` (only a SHA-256 of the Shortcut key), `profiles.health_settings`.
+- `health-token`: makes a personal key (`lth_…`, shown once; a new one turns the
+  old off) or turns it off. `health-ingest`: the Shortcut's endpoint; checks the
+  key, reads numbers sent as text, miles/km, pounds/kg, today or a list of days
+  (≤ 60 days back), ignores impossible values and says why, keeps one row per
+  day (re-sends update it), uses your time zone for "today".
+- Health screen: today's steps ring vs. goal, distance / active energy /
+  exercise / goal streak, source label (Apple Health vs. typed), week and month
+  charts per metric with totals and daily averages (empty days stay empty),
+  recent days with edit, manual entry with checks, weight history (off by
+  default, neutral, no goals), connect guide with copyable address + key and the
+  exact Shortcut and automation steps, settings (units, step goal, weight,
+  turn off key, delete all health data).
+- Home: steps today / this week in At a glance and the briefing.
+
+**Verified**
+- Unit: 238 tests (Shortcut payload parsing; merging Health + typed data;
+  totals/averages/streaks; ingest end to end with a fake database incl. wrong
+  keys, time zones, re-sends, clock skew, weight).
+- Database: health privacy (nobody else can read your data or your key's hash;
+  impossible values rejected). End-to-end: 172 checks incl. manual entry,
+  charts, opt-in weight, making a key and Shortcut rows appearing on Health and
+  Home against a simulated Supabase, with accessibility scans.
+
+**Not verified yet (needs your setup)**
+- A real Shortcut on your iPhone posting to a real deployed function. See
+  docs/SETUP_HEALTH.md. Shortcuts' exact action names can differ slightly by iOS
+  version.
+
+**Next step:** Phase 8 — News.

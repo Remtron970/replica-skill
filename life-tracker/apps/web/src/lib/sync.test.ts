@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ACADEMIC, DEFAULT_DASHBOARD, DEFAULT_PREFS, normalizeAcademic, normalizeDashboard, parsePrefs, pickWinner, prefsToRow, rowToPrefs, type Prefs } from "./sync";
+import { DEFAULT_ACADEMIC, DEFAULT_DASHBOARD, DEFAULT_PREFS, normalizeAcademic, normalizeDashboard, normalizeHealthSettings, parsePrefs, pickWinner, prefsToRow, rowToPrefs, type Prefs } from "./sync";
 
 describe("parsePrefs", () => {
   it("returns defaults for missing or broken data", () => {
@@ -21,6 +21,7 @@ describe("parsePrefs", () => {
       academic: { scaleId: "11111111-2222-4333-8444-555555555555", bonus: { regular: 0, honors: 0.5, ap: 1, ib: 1, dual: 0.5, other: 0 } },
       schedule: { schoolDays: [1, 2, 3, 4, 5], fixed: { "1": "t-all" }, rotation: ["t-a", "t-b"], anchorDate: "2026-11-24", anchorIndex: 0, termStart: null, termEnd: "2027-06-10" },
       email: { ai: false, retentionDays: 14 },
+      health: { units: "metric", stepGoal: 10000, trackWeight: true },
       updatedAt: 1_700_000_000_000,
     };
     expect(parsePrefs(JSON.stringify(p))).toEqual(p);
@@ -33,6 +34,14 @@ describe("parsePrefs", () => {
     expect(p.pins).toEqual(["email", "news", "ai"]);
     expect(p.demo).toBe(false);
     expect(p.updatedAt).toBe(0);
+  });
+});
+
+describe("normalizeHealthSettings", () => {
+  it("keeps weight off by default and rejects silly goals", () => {
+    expect(normalizeHealthSettings(undefined)).toEqual({ units: "imperial", stepGoal: 8000, trackWeight: false });
+    expect(normalizeHealthSettings({ units: "metric", stepGoal: 3, trackWeight: "yes" })).toEqual({ units: "metric", stepGoal: 8000, trackWeight: false });
+    expect(normalizeHealthSettings({ stepGoal: "6500.4" }).stepGoal).toBe(6500);
   });
 });
 

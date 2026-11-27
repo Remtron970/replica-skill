@@ -8,7 +8,7 @@
  *   deleted          soft delete, so deletions reach other devices
  */
 
-export type Source = "manual" | "csv" | "canvas" | "google_classroom" | "gmail" | "demo";
+export type Source = "manual" | "csv" | "canvas" | "google_classroom" | "gmail" | "shortcut" | "demo";
 
 export interface SyncRecord {
   id: string;
