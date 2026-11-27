@@ -2,6 +2,7 @@
 // the model (WebLLM on WebGPU, or a local Ollama server), accounts and chats (localStorage).
 import { marked } from "./vendor/marked.esm.js";
 import DOMPurify from "./vendor/purify.es.mjs";
+import { initCreate } from "./create.js";
 
 const APP_NAME = "Remtron5000";
 
@@ -269,6 +270,10 @@ const accounts = {
       store.set("chats:" + user.id, store.get("chats:guest", []));
       store.set("activeId:" + user.id, store.get("activeId:guest", null));
       store.remove("chats:guest"); store.remove("activeId:guest");
+      for (const k of ["gallery", "falKey"]) {
+        const v = store.get(k + ":guest", null);
+        if (v != null) { store.set(k + ":" + user.id, v); store.remove(k + ":guest"); }
+      }
     }
     this.startSession(user.id);
     return user;
@@ -298,7 +303,7 @@ const accounts = {
   },
   remove() {
     const user = currentUser();
-    store.remove("chats:" + user.id); store.remove("activeId:" + user.id);
+    for (const k of ["chats", "activeId", "gallery", "falKey", "mode"]) store.remove(k + ":" + user.id);
     state.users = state.users.filter((u) => u.id !== user.id);
     saveUsers();
     this.startSession(null);
@@ -376,8 +381,11 @@ $("authForm").addEventListener("submit", async (e) => {
 $("continueGuest").addEventListener("click", () => { accounts.startSession("guest"); hideAuth(); });
 
 // Account page
-function openAccount() {
+function openAccount(section) {
   const user = currentUser();
+  $("falKey").value = store.get("falKey:" + dataKey(), "");
+  $("keyOk").textContent = "";
+  $("keyUserHint").value = user ? user.username : "guest";
   closeSidebar();
   paintAvatar($("accAvatar"), user);
   $("accName").textContent = user ? user.name : "Guest";
@@ -395,6 +403,7 @@ function openAccount() {
     renderSwatches(user.color);
   }
   $("account").showModal();
+  if (section === "key") setTimeout(() => { $("keyForm").scrollIntoView({ behavior: "smooth", block: "center" }); $("falKey").focus(); }, 250);
 }
 function renderSwatches(selected) {
   const box = $("swatches");
@@ -416,9 +425,24 @@ function renderSwatches(selected) {
   });
   box.dataset.choice = selected;
 }
-$("openAccount").addEventListener("click", openAccount);
-$("topAvatar").addEventListener("click", openAccount);
+$("openAccount").addEventListener("click", () => openAccount());
+$("topAvatar").addEventListener("click", () => openAccount());
+$("keyForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const k = $("falKey").value.trim();
+  if (!k) { $("keyOk").textContent = ""; return; }
+  store.set("falKey:" + dataKey(), k);
+  $("keyOk").textContent = "Key saved ✓ You can start creating.";
+  creator?.refresh();
+});
+$("keyRemove").addEventListener("click", () => {
+  store.remove("falKey:" + dataKey());
+  $("falKey").value = "";
+  $("keyOk").textContent = "Key removed.";
+  creator?.refresh();
+});
 $("closeAccount").addEventListener("click", () => $("account").close());
+$("account").addEventListener("close", () => creator?.refresh());
 $("account").addEventListener("click", (e) => { if (e.target === $("account")) $("account").close(); });
 $("accSignUp").addEventListener("click", () => { $("account").close(); showAuth("signup"); });
 $("accSignIn").addEventListener("click", () => { $("account").close(); showAuth("signin"); });
@@ -502,7 +526,7 @@ function renderChatList() {
     row.style.setProperty("--i", Math.min(i, 12));
     const open = document.createElement("button");
     open.className = "open"; open.textContent = chat.title; open.title = chat.title;
-    open.onclick = () => { selectChat(chat.id); closeSidebar(); };
+    open.onclick = () => { store.set("mode:" + dataKey(), "chat"); selectChat(chat.id); closeSidebar(); };
     const actions = document.createElement("div"); actions.className = "row-actions";
     const ren = document.createElement("button"); ren.textContent = "✎"; ren.setAttribute("aria-label", "Rename chat");
     ren.onclick = () => {
@@ -566,7 +590,25 @@ function scrollToBottom(force) {
   if (force || nearBottom) m.scrollTop = m.scrollHeight;
 }
 
-function renderAll() { renderIdentity(); renderChatList(); renderMessages(); updateComposer(); }
+function renderAll() { renderIdentity(); renderChatList(); renderMessages(); updateComposer(); applyMode(); creator?.refresh(); }
+
+// ---------- Chat / Create mode ----------
+let creator = null;
+function applyMode() {
+  const mode = store.get("mode:" + dataKey(), "chat");
+  els.app.classList.toggle("mode-create", mode === "create");
+  $("createView").hidden = mode !== "create";
+  $("modeChat").setAttribute("aria-selected", String(mode === "chat"));
+  $("modeCreate").setAttribute("aria-selected", String(mode === "create"));
+}
+function setMode(mode) {
+  store.set("mode:" + dataKey(), mode);
+  applyMode();
+  creator?.refresh();
+  if (mode === "chat") els.input.focus();
+}
+$("modeChat").addEventListener("click", () => setMode("chat"));
+$("modeCreate").addEventListener("click", () => setMode("create"));
 
 function updateComposer() {
   els.send.hidden = state.generating;
@@ -603,6 +645,7 @@ function selectChat(id) {
 
 function newChat() {
   if (state.generating) stopGenerating();
+  store.set("mode:" + dataKey(), "chat");
   setActive(null); renderAll(); closeSidebar(); els.input.focus();
 }
 
@@ -824,6 +867,8 @@ installBtn.addEventListener("click", async () => {
 if (state.session && state.session !== "guest" && !currentUser()) { state.session = null; store.set("session", null); }
 loadUserData();
 if (new URLSearchParams(location.search).has("new")) { setActive(null); history.replaceState(null, "", location.pathname); }
+
+creator = initCreate({ store, dataKey, toast, openAccount });
 
 applyTheme();
 populateModels();

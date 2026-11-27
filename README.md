@@ -2,7 +2,8 @@
 
 Remtron5000 is a ChatGPT-style chat assistant you can use for free. There's no
 account, no API key, no server and no monthly bill. The AI model runs **on your
-own device**, so your conversations never leave your browser.
+own device**, so your conversations never leave your browser. The optional
+Create tab adds image and video generation through fal.ai with your own key.
 
 It is an original app built with the Replica skills, clean-room style. It
 copies how a chat assistant works, but not anyone's code, branding or text.
@@ -13,6 +14,10 @@ copies how a chat assistant works, but not anyone's code, branding or text.
 - Stop a response, regenerate the last answer, edit and resend your message
 - A chat history sidebar grouped by date, with search, rename and delete
 - Choice of 8 open-source models, from tiny (0.3 GB) to smarter (2 GB)
+- **Create tab:** images and videos from the leading cloud models (GPT Image 2,
+  Nano Banana 2, Seedream 5 Pro, Kling 3 Pro, Seedance 2.0, Veo 3.1) through
+  [fal.ai](https://fal.ai), using your own fal.ai key, plus photo editing, a gallery,
+  and a full-screen viewer with save. See "Image and video generation" below.
 - Custom instructions (system prompt) and temperature
 - An orange theme with animations, light and dark mode, and a layout that works on phones
 - An Account page: create an account, sign in and out, choose an avatar color,
@@ -74,12 +79,43 @@ Then open Settings, set Engine to Ollama, and pick the model from the menu at
 the top. If you host Remtron5000 somewhere other than `localhost`, allow that origin
 with `OLLAMA_ORIGINS=https://your-site.example ollama serve`.
 
+## Image and video generation
+
+Chat stays free and runs on your device. The **Create** tab uses paid cloud
+models, which no phone can run, so it needs your own [fal.ai](https://fal.ai) API key:
+
+1. Make an account at fal.ai, add some credit, and create a key at
+   <https://fal.ai/dashboard/keys>.
+2. In Remtron5000, open **Account**, go to **Image & video generation**, paste the key, and tap **Save key**.
+3. Switch to **🎨 Create**, then pick Image or Video, a model and a shape, and tap **Generate**.
+
+| Kind | Model | fal.ai model ID | Rough cost |
+| --- | --- | --- | --- |
+| Image | GPT Image 2 (OpenAI) | `openai/gpt-image-2` (edit: `/edit`) | up to ~$0.21 per image at high quality |
+| Image | Nano Banana 2 (Google) | `fal-ai/nano-banana-2` (edit: `/edit`) | ~$0.08 per image |
+| Image | Seedream 5 Pro (ByteDance) | `bytedance/seedream/v5/pro/text-to-image` | ~$0.05 per image |
+| Video | Kling 3 Pro (Kuaishou) | `fal-ai/kling-video/v3/pro/text-to-video` | ~$0.11–0.17 per second |
+| Video | Seedance 2.0 (ByteDance) | `bytedance/seedance-2.0/text-to-video` | ~$0.30 per second at 720p |
+| Video | Veo 3.1 (Google) | `fal-ai/veo3.1` | see fal.ai |
+
+Prices are estimates from public listings in November 2026. fal.ai's model pages
+are the real price list. Leaderboards change often, so **Advanced** in the Create
+panel accepts any fal.ai model ID and extra JSON options. That lets you try a
+newer model without changing the code; update `MODELS` in `create.js` to make it
+a default.
+
+Your key is stored on your device and sent only to fal.ai. Anyone with access to
+your unlocked device and browser could read it, so set a spending limit in your
+fal.ai dashboard. fal.ai's file links may not last forever, so use **Save** on the
+creations you want to keep.
+
 ## Files
 
 ```
 index.html   layout
 styles.css   design tokens (light and dark) and components
-app.js       storage, engines (WebLLM, Ollama), streaming, UI, install button
+app.js       storage, accounts, engines (WebLLM, Ollama), streaming, UI, install button
+create.js    Create tab: fal.ai queue client, model list, gallery, viewer
 manifest.webmanifest   app name, icons, colours, shortcut
 sw.js        service worker: offline app shell + cached engine script
 icons/       app icon (SVG source + PNGs, including maskable and Apple touch)
