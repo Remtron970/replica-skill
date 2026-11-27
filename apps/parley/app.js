@@ -3,6 +3,8 @@
 import { marked } from "./vendor/marked.esm.js";
 import DOMPurify from "./vendor/purify.es.mjs";
 import { initCreate } from "./create.js";
+import { files as fileStore, blobUrl } from "./idb.js";
+import { kindOf, readImage, readText, clip, formatSize, fileIcon, MAX_FILES, MAX_FILE_BYTES } from "./attachments.js";
 
 const APP_NAME = "Remtron5000";
 
@@ -13,8 +15,9 @@ const WEBLLM_URL = "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm";
 
 // Open-weight models WebLLM ships prebuilt. Sizes are approximate download sizes.
 const WEBLLM_MODELS = [
+  { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", phone: true, label: "Llama 3.2 1B · fastest (~0.9 GB)" },
   { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", phone: true, label: "Qwen 2.5 1.5B · balanced (~1 GB)" },
-  { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", phone: true, label: "Llama 3.2 1B · fast (~0.9 GB)" },
+  { id: "Phi-3.5-vision-instruct-q4f16_1-MLC", vision: true, label: "Phi 3.5 Vision · reads photos (~2.5 GB)" },
   { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", label: "Llama 3.2 3B · smarter (~2 GB)" },
   { id: "Qwen2.5-3B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 3B · smarter (~2 GB)" },
   { id: "Phi-3.5-mini-instruct-q4f16_1-MLC", label: "Phi 3.5 mini · reasoning (~2.2 GB)" },
@@ -81,6 +84,9 @@ const state = {
   abort: null,
 };
 if (/^You are Parley\b/.test(state.settings.systemPrompt)) state.settings.systemPrompt = DEFAULT_SYSTEM;
+// The faster Llama 3.2 1B is now the default. Move people who never picked a model.
+if (!state.settings.modelChosen && state.settings.model === "Qwen2.5-1.5B-Instruct-q4f16_1-MLC") state.settings.model = WEBLLM_MODELS[0].id;
+state.pending = []; // attachments waiting to be sent with the next message
 
 const currentUser = () => state.users.find((u) => u.id === state.session) || null;
 const dataKey = () => (currentUser() ? currentUser().id : "guest");
@@ -129,8 +135,9 @@ function toast(text) {
 // Each engine exposes: ensureReady(), stream(messages, opts) -> async iterator of text deltas, stop().
 const webllmEngine = {
   engine: null, loadedModel: null, loading: null,
-  async ensureReady(model) {
+  async ensureReady(model, { quiet = false } = {}) {
     if (!("gpu" in navigator)) {
+      if (quiet) return;
       if (IS_NATIVE) throw new Error(`${APP_NAME} needs iOS 26 or later to run the AI on this iPhone. Please update iOS in Settings → General → Software Update.`);
       throw new Error("This browser has no WebGPU. Use a recent Chrome, Edge or Safari 26+, or switch the engine to Ollama in Settings.");
     }
@@ -138,16 +145,25 @@ const webllmEngine = {
     if (this.loading) await this.loading.catch(() => {});
     if (this.engine && this.loadedModel === model) return;
     this.loading = (async () => {
-      setStatus("Loading engine…");
+      setStatus(store.get("warm:" + model) ? "Starting " + labelFor(model) + "…" : "Loading engine…");
       let webllm;
       try { webllm = await import(WEBLLM_URL); }
       catch { throw new Error("Couldn't download the AI engine. Check your internet connection (only the first load needs it), or switch the engine to Ollama in Settings."); }
       const initProgressCallback = (r) => { setStatus(r.text); setProgress(r.progress); };
       // In the iOS app, store model weights in IndexedDB, which is reliable inside WKWebView.
       const appConfig = { ...webllm.prebuiltAppConfig, useIndexedDBCache: IS_NATIVE };
-      if (!this.engine) this.engine = await webllm.CreateMLCEngine(model, { initProgressCallback, appConfig });
-      else await this.engine.reload(model);
+      if (!this.engine) {
+        // Run the model in a background thread so the screen never freezes; fall back to the page if workers fail.
+        try {
+          const worker = new Worker(new URL("./llm-worker.js", import.meta.url), { type: "module" });
+          this.engine = await webllm.CreateWebWorkerMLCEngine(worker, model, { initProgressCallback, appConfig });
+        } catch (err) {
+          console.warn("Worker engine unavailable, using the page:", err);
+          this.engine = await webllm.CreateMLCEngine(model, { initProgressCallback, appConfig });
+        }
+      } else await this.engine.reload(model);
       this.loadedModel = model;
+      store.set("warm:" + model, true); // downloaded once: next visit can start it in the background
       setProgress(null);
       setStatus("Ready · " + labelFor(model));
     })();
@@ -181,7 +197,7 @@ const ollamaEngine = {
     const res = await fetch(this.base() + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: state.settings.ollamaModel, messages, stream: true, options: { temperature } }),
+      body: JSON.stringify({ model: state.settings.ollamaModel, messages: messages.map(toOllama), stream: true, options: { temperature } }),
       signal,
     });
     if (!res.ok || !res.body) throw new Error("Ollama answered " + res.status + ". " + (await res.text().catch(() => "")));
@@ -205,6 +221,17 @@ const ollamaEngine = {
   },
   stop() { /* handled by AbortController */ },
 };
+
+// Ollama wants plain text content plus a separate list of base64 images.
+function toOllama(m) {
+  if (!Array.isArray(m.content)) return m;
+  const text = m.content.filter((p) => p.type === "text").map((p) => p.text).join("\n");
+  const images = m.content.filter((p) => p.type === "image_url").map((p) => p.image_url.url.split(",")[1]);
+  return images.length ? { role: m.role, content: text, images } : { role: m.role, content: text };
+}
+
+const VISION_MODEL = WEBLLM_MODELS.find((m) => m.vision).id;
+const isVisionModel = (id) => !!WEBLLM_MODELS.find((m) => m.id === id)?.vision;
 
 const currentEngine = () => (state.settings.engine === "ollama" ? ollamaEngine : webllmEngine);
 const currentModel = () => (state.settings.engine === "ollama" ? state.settings.ollamaModel : state.settings.model);
@@ -304,6 +331,7 @@ const accounts = {
   remove() {
     const user = currentUser();
     for (const k of ["chats", "activeId", "gallery", "falKey", "mode"]) store.remove(k + ":" + user.id);
+    fileStore.delPrefix(user.id + ":").catch(() => {});
     state.users = state.users.filter((u) => u.id !== user.id);
     saveUsers();
     this.startSession(null);
@@ -536,6 +564,7 @@ function renderChatList() {
     const del = document.createElement("button"); del.textContent = "🗑"; del.setAttribute("aria-label", "Delete chat");
     del.onclick = () => {
       if (!confirm(`Delete “${chat.title}”?`)) return;
+      for (const m of chat.messages) for (const key of m.images || []) fileStore.del(key).catch(() => {});
       state.chats = state.chats.filter((c) => c.id !== chat.id);
       if (state.activeId === chat.id) setActive(null);
       saveChats(); renderAll(); toast("Chat deleted");
@@ -551,8 +580,28 @@ function messageNode(msg, index, chat) {
   wrap.className = "msg " + msg.role;
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  if (msg.role === "user") bubble.textContent = msg.content;
-  else if (msg.error) { const p = document.createElement("p"); p.className = "error-note"; p.textContent = msg.content; bubble.appendChild(p); }
+  if (msg.role === "user") {
+    if (msg.images?.length || msg.files?.length) {
+      const att = document.createElement("div");
+      att.className = "msg-attachments";
+      for (const key of msg.images || []) {
+        const img = document.createElement("img");
+        img.alt = "Attached photo"; img.className = "msg-photo";
+        blobUrl(key).then((u) => { if (u) img.src = u; else img.replaceWith(Object.assign(document.createElement("span"), { className: "file-chip", textContent: "🖼️ photo" })); });
+        att.appendChild(img);
+      }
+      for (const f of msg.files || []) {
+        const chip = document.createElement("span");
+        chip.className = "file-chip";
+        chip.textContent = `${fileIcon(f.name)} ${f.name}`;
+        chip.title = `${formatSize(f.size)}${f.clipped ? " · only the first part was read" : ""}`;
+        att.appendChild(chip);
+      }
+      wrap.appendChild(att);
+    }
+    bubble.textContent = msg.content;
+    if (!msg.content) bubble.hidden = true;
+  } else if (msg.error) { const p = document.createElement("p"); p.className = "error-note"; p.textContent = msg.content; bubble.appendChild(p); }
   else bubble.appendChild(renderMarkdown(msg.content));
   wrap.appendChild(bubble);
 
@@ -613,8 +662,79 @@ $("modeCreate").addEventListener("click", () => setMode("create"));
 function updateComposer() {
   els.send.hidden = state.generating;
   els.stop.hidden = !state.generating;
-  els.send.disabled = !els.input.value.trim();
+  els.send.disabled = !els.input.value.trim() && !state.pending.length;
 }
+
+// ---------- attachments ----------
+function renderPending() {
+  const box = $("attachments");
+  box.innerHTML = "";
+  box.hidden = !state.pending.length;
+  for (const a of state.pending) {
+    const chip = document.createElement("div");
+    chip.className = "att " + a.kind + (a.loading ? " loading" : "");
+    if (a.kind === "image" && a.dataUrl) {
+      const img = document.createElement("img"); img.src = a.dataUrl; img.alt = a.name; chip.appendChild(img);
+    } else {
+      const ic = document.createElement("span"); ic.className = "att-icon"; ic.textContent = a.loading ? "⏳" : fileIcon(a.name);
+      const t = document.createElement("span"); t.className = "att-text";
+      const n = document.createElement("b"); n.textContent = a.name;
+      const s = document.createElement("small"); s.textContent = a.loading ? "Reading…" : formatSize(a.size);
+      t.append(n, s); chip.append(ic, t);
+    }
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "att-x"; x.textContent = "✕"; x.setAttribute("aria-label", "Remove " + a.name);
+    x.onclick = () => { state.pending = state.pending.filter((p) => p !== a); renderPending(); };
+    chip.appendChild(x);
+    box.appendChild(chip);
+  }
+  updateComposer();
+}
+
+async function addFiles(list) {
+  for (const file of [...list]) {
+    if (state.pending.length >= MAX_FILES) { toast(`Up to ${MAX_FILES} attachments per message`); break; }
+    const kind = kindOf(file);
+    if (!kind) { toast(`Can't read “${file.name}”. Try photos, PDFs, or text and code files.`); continue; }
+    if (file.size > MAX_FILE_BYTES) { toast(`“${file.name}” is over 25 MB`); continue; }
+    const a = { id: uid(), kind: kind === "image" ? "image" : "file", name: file.name || "photo.jpg", size: file.size, loading: true };
+    state.pending.push(a);
+    renderPending();
+    try {
+      if (a.kind === "image") a.dataUrl = await readImage(file);
+      else a.text = await readText(file);
+      a.loading = false;
+    } catch (err) {
+      state.pending = state.pending.filter((p) => p !== a);
+      toast(err.message?.startsWith("This PDF") ? err.message : `Couldn't read “${file.name}”`);
+    }
+    renderPending();
+  }
+  if (state.pending.some((p) => p.kind === "image")) maybeHintVision();
+}
+
+function maybeHintVision() {
+  if (state.settings.engine !== "webllm" || isVisionModel(state.settings.model)) return;
+  toast(IS_NATIVE ? "Photos can't be read on iPhone yet; the AI will see only your text and files." : "Your photo will be read by Phi 3.5 Vision (a one-time ~2.5 GB download).");
+}
+
+$("attachBtn").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+els.input.addEventListener("paste", (e) => {
+  const fl = [...(e.clipboardData?.files || [])];
+  if (fl.length) { e.preventDefault(); addFiles(fl); }
+});
+const mainEl = document.querySelector(".main");
+mainEl.addEventListener("dragover", (e) => {
+  if (els.app.classList.contains("mode-create") || ![...(e.dataTransfer?.types || [])].includes("Files")) return;
+  e.preventDefault(); mainEl.classList.add("dropping");
+});
+mainEl.addEventListener("dragleave", (e) => { if (!mainEl.contains(e.relatedTarget)) mainEl.classList.remove("dropping"); });
+mainEl.addEventListener("drop", (e) => {
+  mainEl.classList.remove("dropping");
+  if (els.app.classList.contains("mode-create") || !e.dataTransfer?.files?.length) return;
+  e.preventDefault(); addFiles(e.dataTransfer.files);
+});
 
 function startEdit(wrap, index, chat) {
   if (state.generating) return;
@@ -628,9 +748,10 @@ function startEdit(wrap, index, chat) {
   cancel.onclick = renderMessages;
   save.onclick = () => {
     const text = ta.value.trim();
-    if (!text) return;
+    const { images, files } = chat.messages[index];
+    if (!text && !images?.length && !files?.length) return;
     chat.messages = chat.messages.slice(0, index);
-    sendMessage(text);
+    sendMessage(text, { images, files });
   };
   row.append(cancel, save);
   wrap.append(ta, row);
@@ -659,14 +780,86 @@ function ensureChat(firstText) {
   return chat;
 }
 
-async function sendMessage(text) {
+// Characters of attached file text the model can take in one message (small on-device models have ~4K-token memories).
+const fileBudget = () => (state.settings.engine === "ollama" ? 40000 : 7000);
+
+async function sendMessage(text, reuse = null) {
   if (state.generating) return;
-  const chat = ensureChat(text);
-  chat.messages.push({ role: "user", content: text });
+  if (state.pending.some((p) => p.loading)) { toast("Still reading your file…"); return; }
+  const firstName = reuse?.files?.[0]?.name || state.pending[0]?.name;
+  const chat = ensureChat(text || (firstName ? "About " + firstName : "Photo"));
+  const msg = { role: "user", content: text };
+  if (reuse) {
+    if (reuse.images?.length) msg.images = reuse.images;
+    if (reuse.files?.length) msg.files = reuse.files;
+  } else if (state.pending.length) {
+    const pend = state.pending;
+    state.pending = [];
+    renderPending();
+    const imgs = pend.filter((p) => p.kind === "image");
+    const docs = pend.filter((p) => p.kind === "file");
+    if (imgs.length) {
+      msg.images = [];
+      for (const p of imgs) {
+        const key = `${dataKey()}:img:${p.id}`;
+        await fileStore.put(key, p.dataUrl).catch(() => {});
+        msg.images.push(key);
+      }
+    }
+    if (docs.length) {
+      const per = Math.floor(fileBudget() / docs.length);
+      msg.files = docs.map((p) => { const c = clip(p.text, per); return { name: p.name, size: p.size, text: c.text, clipped: c.clipped }; });
+    }
+  }
+  chat.messages.push(msg);
   chat.updatedAt = Date.now();
   saveChats();
   els.input.value = ""; autosize();
   await generateReply(chat);
+}
+
+// Builds what the model sees: text, attached file contents, and (for the newest message) photos.
+async function buildHistory(chat, { vision }) {
+  const msgs = chat.messages.slice(0, -1).filter((m) => !m.error);
+  const lastUserIdx = msgs.map((m) => m.role).lastIndexOf("user");
+  const out = [];
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
+    if (m.role !== "user") { out.push({ role: m.role, content: m.content }); continue; }
+    let text = m.content || "";
+    for (const f of m.files || []) {
+      text += `\n\n[Attached file: ${f.name}${f.clipped ? " (only the first part fits)" : ""}]\n\`\`\`\n${f.text}\n\`\`\``;
+    }
+    const nImg = m.images?.length || 0;
+    if (nImg && vision && i === lastUserIdx) {
+      const parts = [{ type: "text", text: text || "What's in this photo?" }];
+      for (const key of m.images) {
+        const url = await fileStore.get(key).catch(() => null);
+        if (url) parts.push({ type: "image_url", image_url: { url } });
+      }
+      out.push({ role: "user", content: parts });
+    } else {
+      if (nImg) text += `\n\n(${nImg === 1 ? "A photo was" : nImg + " photos were"} attached${i === lastUserIdx ? ", but this model can't see images" : " earlier"}.)`;
+      out.push({ role: "user", content: text.trim() });
+    }
+  }
+  return trimToFit(out);
+}
+
+// Keep the most recent messages that fit in the model's memory, so replies start faster and never overflow.
+function trimToFit(messages) {
+  const budget = state.settings.engine === "ollama" ? 60000 : 10000; // characters (~3-4 per token)
+  const size = (m) => (Array.isArray(m.content) ? m.content.reduce((n, p) => n + (p.text?.length || 600), 0) : m.content.length) + 20;
+  const kept = [];
+  let used = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const s = size(messages[i]);
+    if (kept.length && used + s > budget) break;
+    kept.unshift(messages[i]);
+    used += s;
+  }
+  if (kept[0]?.role === "assistant") kept.shift();
+  return kept;
 }
 
 async function regenerate() {
@@ -693,18 +886,28 @@ async function generateReply(chat) {
   scrollToBottom(true);
 
   const engine = currentEngine();
-  const history = chat.messages.slice(0, -1).filter((m) => !m.error).map(({ role, content }) => ({ role, content }));
-  const sys = state.settings.systemPrompt.trim();
-  const messages = sys ? [{ role: "system", content: sys }, ...history] : history;
+  const wantsPhoto = !!chat.messages.at(-2)?.images?.length;
+  // Photos need a model that can see. On computers, switch to the vision model for this reply.
+  if (wantsPhoto && engine === webllmEngine && !isVisionModel(state.settings.model) && !IS_NATIVE) {
+    state.settings.model = VISION_MODEL;
+    saveSettings();
+    populateModels();
+  }
+  const vision = engine === ollamaEngine || isVisionModel(currentModel());
 
-  let frame = 0;
-  const paint = () => { bubble.classList.add("typing"); bubble.replaceChildren(renderMarkdown(reply.content)); scrollToBottom(); };
+  // Throttled painting: re-render the reply at most every 60 ms instead of on every token.
+  let timer = 0, last = 0;
+  const paint = () => { timer = 0; last = performance.now(); bubble.classList.add("typing"); bubble.replaceChildren(renderMarkdown(reply.content)); scrollToBottom(); };
+  const schedule = () => { if (!timer) timer = setTimeout(paint, Math.max(0, 60 - (performance.now() - last))); };
   try {
+    const history = await buildHistory(chat, { vision });
+    const sys = state.settings.systemPrompt.trim();
+    const messages = sys ? [{ role: "system", content: sys }, ...history] : history;
     await engine.ensureReady(currentModel());
     setStatus("Thinking…");
     for await (const delta of engine.stream(messages, { temperature: Number(state.settings.temperature), signal: state.abort.signal })) {
       reply.content += delta;
-      if (!frame) frame = requestAnimationFrame(() => { frame = 0; paint(); });
+      schedule();
     }
   } catch (err) {
     if (err.name !== "AbortError") {
@@ -712,7 +915,7 @@ async function generateReply(chat) {
       else reply.content += "\n\n_(stopped: " + (err.message || err) + ")_";
     }
   } finally {
-    if (frame) cancelAnimationFrame(frame);
+    clearTimeout(timer);
     if (!reply.content) chat.messages.pop(); // stopped before any text arrived
     state.generating = false;
     state.abort = null;
@@ -755,9 +958,11 @@ function applyTheme() {
 els.composer.addEventListener("submit", (e) => {
   e.preventDefault();
   const text = els.input.value.trim();
-  if (text) sendMessage(text);
+  if (text || state.pending.length) sendMessage(text);
 });
 els.input.addEventListener("input", autosize);
+// Start loading the model as soon as someone starts typing, so it's ready by the time they hit send.
+els.input.addEventListener("input", () => warmUp(true), { once: true });
 els.input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); els.composer.requestSubmit(); }
 });
@@ -778,7 +983,7 @@ els.messages.addEventListener("click", async (e) => {
 
 els.modelSelect.addEventListener("change", () => {
   if (state.settings.engine === "ollama") state.settings.ollamaModel = els.modelSelect.value;
-  else state.settings.model = els.modelSelect.value;
+  else { state.settings.model = els.modelSelect.value; state.settings.modelChosen = true; }
   saveSettings();
   setStatus(state.settings.engine === "ollama" ? "Ready · Ollama · " + els.modelSelect.value : "Model loads on your next message");
 });
@@ -868,10 +1073,21 @@ if (state.session && state.session !== "guest" && !currentUser()) { state.sessio
 loadUserData();
 if (new URLSearchParams(location.search).has("new")) { setActive(null); history.replaceState(null, "", location.pathname); }
 
-creator = initCreate({ store, dataKey, toast, openAccount });
+creator = initCreate({ store, dataKey, toast, openAccount, isNative: IS_NATIVE });
+
+// Load the chat model in the background so the first reply starts right away.
+// Without `force`, only models already downloaded once are started (no surprise downloads).
+function warmUp(force = false) {
+  if (state.settings.engine !== "webllm" || !("gpu" in navigator)) return;
+  const model = state.settings.model;
+  if (webllmEngine.loadedModel === model || webllmEngine.loading) return;
+  if (!force && !store.get("warm:" + model)) return;
+  webllmEngine.ensureReady(model, { quiet: true }).catch(() => setStatus("Model loads on your first message"));
+}
 
 applyTheme();
 populateModels();
 renderAll();
 if (state.session === null) showAuth(state.users.length ? "signin" : "signup");
 else els.input.focus();
+setTimeout(() => warmUp(false), 800);

@@ -5,6 +5,8 @@
   service they connect with their own key. To be safe, declare in App Store Connect:
   **User Content → Photos or Videos** and **User Content → Other User Content**,
   used for **App Functionality**, **not linked** to identity, **not used for tracking**.
+  The free FLUX model sends prompts to pollinations.ai in the same way, so the same
+  "Other User Content" answer covers it.
   Optional accounts (username, display name, salted password hash), chats and settings are stored only on the device (WebView local storage and
   IndexedDB). Nothing is sent to the developer or any third party.
 - **Network requests the app makes:** model files are downloaded from public CDNs
