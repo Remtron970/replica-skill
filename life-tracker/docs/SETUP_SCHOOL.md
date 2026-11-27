@@ -25,7 +25,7 @@ logged in with `supabase login`, then from the `life-tracker` folder:
 
 ```bash
 supabase link --project-ref YOUR-PROJECT-REF
-supabase functions deploy school-sync school-connect-canvas google-classroom-auth
+supabase functions deploy school-sync school-connect-canvas google-auth email-sync email-summarize
 ```
 
 Then add these **Edge Function secrets** (Supabase → Edge Functions → Secrets, or
@@ -67,7 +67,7 @@ takes about 15 minutes.
    Add your Google account under **Test users**.
 4. **Credentials → Create credentials → OAuth client ID → Web application**.
    Authorized redirect URI:
-   `https://YOUR-PROJECT-REF.supabase.co/functions/v1/google-classroom-auth`
+   `https://YOUR-PROJECT-REF.supabase.co/functions/v1/google-auth`
    Copy the client ID and secret into the `GOOGLE_CLIENT_ID` and
    `GOOGLE_CLIENT_SECRET` secrets.
 5. In the app: **Settings → School connections → Google Classroom → Connect**,

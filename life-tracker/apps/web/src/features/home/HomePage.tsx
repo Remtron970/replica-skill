@@ -59,6 +59,7 @@ export function HomePage() {
   const academics = useAcademics();
   const schedule = useSchedule();
   const assignments = useCollection(store.assignments);
+  const emails = useCollection(store.emails);
   const data = useMemo(
     () =>
       prefs.demo
@@ -72,10 +73,11 @@ export function HomePage() {
               schedule: { forDay: schedule.forDay, labelFor: schedule.labelFor, isSetUp: schedule.isSetUp },
               assignments,
               courseNames: new Map(academics.allCourses.map((c) => [c.id, c.name])),
+              emails,
             },
             now,
           ),
-    [prefs.demo, now, academics, schedule, assignments],
+    [prefs.demo, now, academics, schedule, assignments, emails],
   );
   const [customizing, setCustomizing] = useState(false);
 

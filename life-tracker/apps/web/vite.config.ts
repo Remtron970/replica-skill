@@ -51,5 +51,10 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
+    // Server-function code under supabase/functions imports packages by bare name (Deno import map).
+    alias: {
+      "zod/v4": new URL("./node_modules/zod/v4/index.js", import.meta.url).pathname,
+      "@anthropic-ai/sdk/helpers/zod": new URL("./node_modules/@anthropic-ai/sdk/helpers/zod.mjs", import.meta.url).pathname,
+    },
   },
 }));

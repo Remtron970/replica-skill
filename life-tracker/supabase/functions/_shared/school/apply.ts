@@ -11,6 +11,9 @@ import type { MappedSchool } from "./model.ts";
  */
 
 export type Source = "canvas" | "google_classroom";
+
+/** 1 ms after a timestamp (Postgres keeps microseconds; JS truncates to ms, so +1 ms is always later). */
+export const justAfter = (ts: string) => new Date(Date.parse(ts) + 1).toISOString();
 type Row = Record<string, unknown> & { id: string; external_id: string | null; source: string; deleted?: boolean };
 
 export interface Existing {
@@ -54,7 +57,17 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
   const { userId, source, now, newId } = opts;
   const mine = (rows: Row[]) => new Map(rows.filter((r) => r.source === source && r.external_id).map((r) => [r.external_id as string, r]));
   const ex = { courses: mine(existing.courses), cats: mine(existing.grade_categories), items: mine(existing.grade_items), tasks: mine(existing.assignments ?? []) };
-  const base = (id: string, externalId: string) => ({ id, user_id: userId, client_updated_at: now, deleted: false, source, external_id: externalId });
+  // Updates to rows that already exist are stamped just after the row's own time, not
+  // "now": devices still see the change, but anything the user changed on a device
+  // since (e.g. marking an assignment done, not yet uploaded) stays newer and wins.
+  const base = (id: string, externalId: string, prev?: Row) => ({
+    id,
+    user_id: userId,
+    client_updated_at: prev?.client_updated_at ? justAfter(prev.client_updated_at as string) : now,
+    deleted: false,
+    source,
+    external_id: externalId,
+  });
   const plan: Plan = { courses: [], grade_categories: [], grade_items: [], assignments: [], deleted: { courses: [], grade_categories: [], grade_items: [], assignments: [] } };
 
   const courseId = new Map<string, string>();
@@ -63,7 +76,7 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
     const id = prev?.id ?? newId();
     courseId.set(c.externalId, id);
     const row = {
-      ...base(id, c.externalId),
+      ...base(id, c.externalId, prev),
       name: c.name,
       teacher: c.teacher,
       room: c.room,
@@ -81,7 +94,7 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
     const prev = ex.cats.get(k.externalId);
     const id = prev?.id ?? newId();
     catId.set(k.externalId, id);
-    const row = { ...base(id, k.externalId), course_id: cid, name: k.name, weight: k.weight, sort: k.sort };
+    const row = { ...base(id, k.externalId, prev), course_id: cid, name: k.name, weight: k.weight, sort: k.sort };
     if (changed(prev, row)) plan.grade_categories.push(row);
   }
 
@@ -90,7 +103,7 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
     if (!cid) continue;
     const prev = ex.items.get(it.externalId);
     const row = {
-      ...base(prev?.id ?? newId(), it.externalId),
+      ...base(prev?.id ?? newId(), it.externalId, prev),
       course_id: cid,
       category_id: it.categoryExternalId ? (catId.get(it.categoryExternalId) ?? null) : null,
       title: it.title,
@@ -110,7 +123,7 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
     if (!cid) continue;
     const prev = ex.tasks.get(a.externalId);
     const row = {
-      ...base(prev?.id ?? newId(), a.externalId),
+      ...base(prev?.id ?? newId(), a.externalId, prev),
       course_id: cid,
       title: a.title,
       description: a.description,

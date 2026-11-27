@@ -62,7 +62,7 @@ async function settle(page, ms = 500) {
 // exercise sign-in, profile sync and account deletion end to end.
 // ---------------------------------------------------------------------------
 const SB = "https://test-project.supabase.co";
-const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments"];
+const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments", "emails"];
 async function cloudChecks() {
   const USER = { id: "8b0f7a52-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "remy@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
   const calls = [];
@@ -104,7 +104,15 @@ async function cloudChecks() {
       return json(204);
     }
     if (u.pathname === "/rest/v1/rpc/delete_my_account") return json(204);
-    if (u.pathname === "/rest/v1/integrations" && req.method() === "GET") return json(200, integrations);
+    if (u.pathname === "/rest/v1/integrations" && req.method() === "GET") {
+      const provider = u.searchParams.get("provider")?.replace(/^eq\./, "");
+      const rows = provider ? integrations.filter((r) => r.provider === provider) : integrations;
+      if ((req.headers()["accept"] || "").includes("vnd.pgrst.object")) return rows.length ? json(200, rows[0]) : json(406, { code: "PGRST116", message: "no rows" });
+      return json(200, rows);
+    }
+    if (u.pathname === "/functions/v1/email-sync") return json(200, { ok: true, added: 0, updated: 0, expired: 0 });
+    if (u.pathname === "/functions/v1/email-summarize")
+      return json(200, { analysis: { category: "school", summary: "Coach moved practice to 4 PM Thursday.", hasDeadline: false, deadlineOn: null, needsReply: false, isSchool: true, importance: 2, source: "ai" } });
     if (u.pathname === "/rest/v1/integrations" && req.method() === "PATCH") {
       integrations.forEach((r) => Object.assign(r, body));
       return json(204);
@@ -217,6 +225,35 @@ async function cloudChecks() {
   await school.getByRole("button", { name: "Disconnect" }).click();
   await settle(c, 800);
   ok(calls.some((x) => x.method === "PATCH" && x.path.startsWith("/rest/v1/integrations") && x.body?.status === "disconnected"), "Disconnect switches the connection off");
+
+  // Email, with Gmail connected (rows as the email-sync function writes them).
+  const yest = new Date(Date.now() - 86_400_000);
+  yest.setHours(10, 0, 0, 0);
+  integrations.push({ id: "int-gmail", provider: "gmail", status: "connected", account_label: "remy@district.org", last_sync_at: new Date().toISOString(), last_error: null });
+  const er = (id, o) => ({ id, user_id: USER.id, client_updated_at: new Date().toISOString(), updated_at: new Date(Date.now() + ++tick).toISOString(), deleted: false, source: "gmail", external_id: id, thread_id: null, from_name: "", from_email: "", subject: "", snippet: "", received_at: yest.toISOString(), labels: [], unread: true, category: "other", summary: "", summary_source: "ai", has_deadline: false, deadline_on: null, needs_reply: false, is_school: false, importance: 0, web_url: `https://mail.google.com/mail/?authuser=remy%40district.org#all/${id}`, dismissed: false, ...o });
+  tables.emails = new Map([
+    ["9a1b0000-0000-4000-8000-000000000001", er("9a1b0000-0000-4000-8000-000000000001", { from_name: "Ms. Rivera", subject: "Field trip form", category: "important", summary: "Return the signed field-trip form by Friday.", has_deadline: true, deadline_on: "2026-12-04", is_school: true, importance: 3 })],
+    ["9a1b0000-0000-4000-8000-000000000002", er("9a1b0000-0000-4000-8000-000000000002", { from_name: "Store", subject: "Sale", category: "notifications", summary: "A store sale this week." })],
+  ]);
+  await c.goto(`${CURL}#/email`);
+  await settle(c, 2500);
+  const emailMain = await c.locator("main").innerText();
+  ok(emailMain.includes("remy@district.org") && emailMain.includes("Connected"), "Email shows the connected Gmail account");
+  ok(emailMain.includes("You got 2 emails yesterday — 1 important, 1 with a deadline."), "daily recap summarizes yesterday");
+  await c.getByRole("button", { name: /Field trip form/ }).first().click();
+  ok(await c.getByRole("dialog").getByText("AI summary").isVisible(), "AI summaries are labeled as AI");
+  ok((await c.getByRole("link", { name: /Open in Gmail/ }).getAttribute("href")).startsWith("https://mail.google.com/"), "opens the original in Gmail");
+  await c.keyboard.press("Escape");
+  await c.getByRole("button", { name: "Check for new email" }).click();
+  await settle(c, 800);
+  ok(calls.some((x) => x.path === "/functions/v1/email-sync" && x.auth === "Bearer test-access"), "Check now runs an email sync as the user");
+  await c.getByRole("button", { name: "Paste", exact: true }).click();
+  await c.getByLabel("Email text").fill("Practice is moved to 4pm on Thursday because of the field.");
+  await c.getByRole("button", { name: "Summarize" }).click();
+  await settle(c, 800);
+  ok(await c.getByRole("dialog").getByText("Coach moved practice to 4 PM Thursday.").isVisible(), "signed in: pasted emails get the server's AI summary");
+  if (SHOTS) await c.screenshot({ path: `${SHOTS}/phone-email-cloud.png` });
+  await c.keyboard.press("Escape");
 
   await c.goto(`${CURL}#/account`);
   await settle(c, 500);
@@ -610,6 +647,48 @@ try {
     await p.clock.setSystemTime(new Date(2026, 10, 25, 23, 59, 20));
     await p.waitForTimeout(35_000);
     ok(await p.getByText("Reminder: this is due soon.").isVisible(), "assignment reminder appears while the app is open");
+    await ctx.close();
+  }
+
+  console.log("\nEmail (no cloud): paste, quick summary, add deadline to assignments");
+  {
+    const ctx = await browser.newContext({ ...devices["iPhone 15"] });
+    const m = await ctx.newPage();
+    watch(m, "email");
+    await m.goto(`${URL}#/email`);
+    await settle(m);
+    ok(await m.getByText("Get your email recap").isVisible() && (await m.getByRole("button", { name: "Set up cloud sync to connect Gmail" }).isVisible()), "explains Gmail needs cloud sync, offers paste");
+    await m.getByRole("button", { name: "Paste an email" }).click();
+    const d = m.getByRole("dialog");
+    await d.getByRole("button", { name: "Summarize" }).click();
+    ok(await d.getByText("Paste the email's text first.").isVisible(), "paste needs text");
+    await d.getByLabel("From (optional)").fill("Ms. Rivera <rivera@district.org>");
+    await d.getByLabel("Subject (optional)").fill("Field trip form");
+    await d.getByLabel("Email text").fill("Hi class,\nPlease return the signed permission form by Friday. Let me know if you have questions.\nThanks");
+    await d.getByRole("button", { name: "Summarize" }).click();
+    await m.waitForTimeout(400);
+    const res = await d.innerText();
+    ok(res.includes("Quick summary (built-in)") && res.includes("Please return the signed permission form by Friday."), "quick summary works on the device, clearly labeled");
+    ok(res.includes("Needs a reply") && res.includes("School") && /Deadline \w+, \w+ \d+/.test(res), "finds the deadline, reply request and school email");
+    const va = await axe(m);
+    ok(va.length === 0, `paste sheet passes axe${va.length ? ": " + va.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    await d.getByRole("button", { name: "Save to Email" }).click();
+    await settle(m, 500);
+    await m.getByRole("button", { name: /Ms\. Rivera/ }).first().click();
+    await m.getByRole("dialog").getByRole("button", { name: "Add to Assignments" }).click();
+    await m.waitForTimeout(400);
+    ok(await m.getByText("Added to Assignments").isVisible(), "an email deadline becomes an assignment");
+    await m.keyboard.press("Escape");
+    const ve = await axe(m);
+    ok(ve.length === 0, `Email page passes axe${ve.length ? ": " + ve.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (ve.length) for (const x of ve) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    if (SHOTS) await m.screenshot({ path: `${SHOTS}/phone-email.png`, fullPage: true });
+    await m.goto(`${URL}#/assignments`);
+    await settle(m, 500);
+    ok((await m.locator("main").innerText()).includes("Field trip form"), "assignment created from the email");
+    await m.goto(URL);
+    await settle(m, 800);
+    ok((await m.getByRole("region", { name: "Important" }).innerText()).includes("Field trip form"), "Home: important email in Important");
     await ctx.close();
   }
 

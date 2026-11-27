@@ -253,4 +253,7 @@ life-tracker/
 | 2026-11-27 | Block schedules as day types + fixed weekdays + continuous rotation + per-date exceptions | Covers modified block, A/B, A/B/C and plain schedules; days off don't consume rotation days |
 | 2026-11-27 | Synced assignments keep the student's priority, progress and reminder | Teacher-owned fields (title, due date) refresh each sync; student-owned fields never get overwritten |
 | 2026-11-27 | Reminders shown in-app until push (Phase 11) | Real, working reminders now without pretending notifications exist |
+| 2026-11-27 | Email triage model: `claude-opus-5-5` (low effort) by default, `EMAIL_MODEL` secret to switch to `claude-haiku-5-5` | The plan said a cheaper model; the choice is the user's, so the default is the main model and switching is one setting |
+| 2026-11-27 | Built-in rules analyzer shared by server and app | Paste works with no AI/cloud; AI failures/refusals fall back without errors; summaries are labeled AI vs built-in |
+| 2026-11-27 | Server refreshes stamp existing rows 1 ms after their own time | Devices still download the change, but a user's not-yet-uploaded edit (done, dismissed) stays newer and wins |
 | 2026-11-27 | PowerSchool / Infinite Campus via copy-paste import | No student-authorized API exists; avoids asking for school passwords |

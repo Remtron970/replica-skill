@@ -7,6 +7,7 @@ import { mapClassroom } from "../../../../supabase/functions/_shared/school/clas
 import { nextLink, runSchoolSync, saveSecret, SyncError, type Integration } from "../../../../supabase/functions/_shared/school/runSync.ts";
 import { signState, verifyState } from "../../../../supabase/functions/_shared/state.ts";
 import { coursePercent } from "../features/academics/grades";
+import { fakeDb } from "./fakeDb";
 
 const KEY_B64 = btoa(String.fromCharCode(...new Uint8Array(32).map((_, i) => i + 1)));
 
@@ -173,6 +174,26 @@ describe("assignments from school platforms", () => {
   });
 });
 
+describe("server refreshes vs. changes made on a device", () => {
+  it("an update is stamped just after the row's time: devices see it, but a newer device edit still wins", () => {
+    const o = { userId: "u1", source: "canvas" as const, now: "2026-11-27T12:00:00.000Z", newId: () => crypto.randomUUID() };
+    const first = planSchoolSync(mapCanvas(canvasCourses as never, canvasGroups as never), { courses: [], grade_categories: [], grade_items: [], assignments: [] }, o);
+    const prevTs = "2026-11-20T08:00:00.123456+00:00";
+    const existing: Existing = {
+      courses: first.courses.map((r) => ({ ...r, client_updated_at: prevTs })) as never,
+      grade_categories: first.grade_categories.map((r) => ({ ...r, client_updated_at: prevTs })) as never,
+      grade_items: first.grade_items.map((r) => ({ ...r, client_updated_at: prevTs })) as never,
+      assignments: first.assignments.map((r) => ({ ...r, client_updated_at: prevTs })) as never,
+    };
+    const groups = structuredClone(canvasGroups) as unknown as Record<string, { assignments: Record<string, unknown>[] }[]>;
+    groups["101"][0].assignments[1].due_at = "2026-12-04T05:59:59Z";
+    const p = planSchoolSync(mapCanvas(canvasCourses as never, groups as never), existing, { ...o, now: "2026-11-27T12:00:00.000Z" });
+    const stamped = Date.parse(p.assignments[0].client_updated_at as string);
+    expect(stamped).toBeGreaterThan(Date.parse(prevTs)); // devices download it
+    expect(stamped).toBeLessThan(Date.parse("2026-11-21T00:00:00Z")); // an edit made on a device after Nov 20 still wins
+  });
+});
+
 describe("planSchoolSync", () => {
   const mapped = mapCanvas(canvasCourses as never, canvasGroups as never);
   let n = 0;
@@ -249,45 +270,6 @@ describe("OAuth state", () => {
 });
 
 // ---- Full run with a fake database and a fake Canvas server ----
-function fakeDb() {
-  const tables: Record<string, Record<string, unknown>[]> = { sync_runs: [], integration_tokens: [], integrations: [{ id: "int1", status: "connected" }], courses: [], grade_categories: [], grade_items: [], assignments: [] };
-  const from = (t: string) => {
-    let rows = () => tables[t];
-    const filters: ((r: Record<string, unknown>) => boolean)[] = [];
-    let pendingUpdate: Record<string, unknown> | null = null;
-    const apply = () => {
-      const hit = rows().filter((r) => filters.every((f) => f(r)));
-      if (pendingUpdate) hit.forEach((r) => Object.assign(r, pendingUpdate));
-      return hit;
-    };
-    const q = {
-      select: () => q,
-      eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), q),
-      in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), q),
-      single: async () => ({ data: apply()[0] ?? null, error: apply()[0] ? null : { message: "none" } }),
-      insert: (row: Record<string, unknown>) => {
-        const r = { id: `${t}-${tables[t].length + 1}`, ...row };
-        tables[t].push(r);
-        rows = () => [r];
-        return q;
-      },
-      upsert: async (input: Record<string, unknown> | Record<string, unknown>[]) => {
-        for (const row of Array.isArray(input) ? input : [input]) {
-          const k = t === "integration_tokens" ? "integration_id" : "id";
-          const cur = tables[t].find((r) => r[k] === row[k]);
-          if (cur) Object.assign(cur, row);
-          else tables[t].push({ ...row });
-        }
-        return { error: null };
-      },
-      update: (patch: Record<string, unknown>) => ((pendingUpdate = patch), q),
-      then: (res: (v: unknown) => void) => res({ data: apply(), error: null }),
-    };
-    return q;
-  };
-  return { tables, db: { from } };
-}
-
 describe("runSchoolSync (end to end with fakes)", () => {
   const integration: Integration = { id: "int1", user_id: "u1", provider: "canvas", settings: { baseUrl: "https://school.instructure.com" } };
 

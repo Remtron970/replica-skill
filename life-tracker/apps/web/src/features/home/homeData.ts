@@ -3,6 +3,7 @@ import type { CourseSummary } from "../academics/grades";
 import type { GradeItem } from "../academics/types";
 import { scheduleStatus, type ClassBlock, type DayProvider } from "../../lib/schedule";
 import type { Assignment as StoredAssignment } from "../assignments/types";
+import type { EmailRecord } from "../email/types";
 
 /**
  * Everything the Home dashboard and the daily briefing read. In "live" mode it
@@ -98,6 +99,7 @@ export interface LiveInputs {
   schedule?: { forDay: DayProvider; labelFor: (d: Date) => string | null; isSetUp: boolean };
   assignments?: StoredAssignment[];
   courseNames?: Map<string, string>;
+  emails?: EmailRecord[];
 }
 
 /** Due time for an assignment (date-only due dates count as 11:59 PM that day). */
@@ -118,6 +120,7 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
   const hasSchedule = !!input?.schedule?.isSetUp;
   const stored = (input?.assignments ?? []).filter((a) => !a.deleted);
   const hasSchool = hasSchedule || stored.length > 0;
+  const mail = (input?.emails ?? []).filter((e) => !e.deleted && !e.dismissed);
   const nameOf = new Map(input?.summaries.map((s) => [s.course.id, s.course.name]) ?? []);
   const gradeUpdates: GradeUpdate[] = hasGrades
     ? input!.items
@@ -127,7 +130,7 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     : [];
   return {
     mode: "live",
-    connected: { ...NONE, grades: hasGrades, school: hasSchool },
+    connected: { ...NONE, grades: hasGrades, school: hasSchool, email: mail.length > 0 },
     courses: hasGrades ? input!.summaries.filter((s) => s.result.percent !== null).map((s) => ({ id: s.course.id, name: s.course.name, teacher: s.course.teacher, percent: s.result.percent as number, credits: s.course.credits })) : [],
     schedule: [],
     scheduleFor: hasSchedule ? input!.schedule!.forDay : undefined,
@@ -135,7 +138,16 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     assignments: stored
       .map((a) => ({ id: a.id, title: a.title, course: (a.courseId && input?.courseNames?.get(a.courseId)) || "", dueAt: dueDate(a), done: a.status === "done" || a.submitted }))
       .filter((a): a is Assignment => a.dueAt !== null),
-    emails: [],
+    emails: mail.map((e) => ({
+      id: e.id,
+      from: e.fromName || e.fromEmail,
+      subject: e.subject,
+      summary: e.summary,
+      receivedAt: new Date(e.receivedAt),
+      important: e.category === "important" || e.importance >= 2,
+      unread: e.unread,
+      needsReply: e.needsReply,
+    })),
     events: [],
     gradeUpdates,
     news: [],

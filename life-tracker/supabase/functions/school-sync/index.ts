@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   if (!user) return json(req, 401, { error: "Sign in first" });
 
   const db = serviceClient();
-  const { data: integrations, error } = await db.from("integrations").select("id, user_id, provider, settings").eq("user_id", user.id).neq("status", "disconnected");
+  const { data: integrations, error } = await db.from("integrations").select("id, user_id, provider, settings").eq("user_id", user.id).in("provider", ["canvas", "google_classroom"]).neq("status", "disconnected");
   if (error) return json(req, 500, { error: "Couldn't load connections" });
 
   const key = await tokenKey();

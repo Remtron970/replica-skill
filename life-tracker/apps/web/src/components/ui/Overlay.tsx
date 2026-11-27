@@ -45,7 +45,9 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      previous?.focus?.({ preventScroll: true });
+      // Return focus to what opened this; if that's gone, to the page content (not the skip link).
+      if (previous && previous.isConnected) previous.focus({ preventScroll: true });
+      else document.getElementById("main")?.focus({ preventScroll: true });
     };
   }, [open, ref]);
 }

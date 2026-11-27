@@ -20,6 +20,7 @@ const AcademicsPage = lazy(() => import("./features/academics/AcademicsPage").th
 const CoursePage = lazy(() => import("./features/academics/CoursePage").then((m) => ({ default: m.CoursePage })));
 const SchedulePage = lazy(() => import("./features/schedule/SchedulePage").then((m) => ({ default: m.SchedulePage })));
 const AssignmentsPage = lazy(() => import("./features/assignments/AssignmentsPage").then((m) => ({ default: m.AssignmentsPage })));
+const EmailPage = lazy(() => import("./features/email/EmailPage").then((m) => ({ default: m.EmailPage })));
 const ImportPage = lazy(() => import("./features/academics/ImportPage").then((m) => ({ default: m.ImportPage })));
 
 const page = (el: React.ReactNode) => <Suspense fallback={<PageLoading />}>{el}</Suspense>;
@@ -57,6 +58,7 @@ const routes: RouteObject[] = [
       { path: "academics/:courseId", element: page(<CoursePage />) },
       { path: "schedule", element: page(<SchedulePage />) },
       { path: "assignments", element: page(<AssignmentsPage />) },
+      { path: "email", element: page(<EmailPage />) },
       {
         path: "design",
         element: (
@@ -65,7 +67,7 @@ const routes: RouteObject[] = [
           </Suspense>
         ),
       },
-      ...SECTIONS.filter((s) => !["home", "settings", "academics", "schedule", "assignments"].includes(s.id)).map((s) => ({
+      ...SECTIONS.filter((s) => !["home", "settings", "academics", "schedule", "assignments", "email"].includes(s.id)).map((s) => ({
         path: s.path.slice(1),
         element: <SectionPage section={s} />,
       })),

@@ -1,5 +1,6 @@
 import type { Course, GradeCategory, GradeItem, GradingScale, PastCourse, Term } from "../../features/academics/types";
 import type { Assignment } from "../../features/assignments/types";
+import type { EmailRecord } from "../../features/email/types";
 import type { DayType, ScheduleBlock, ScheduleException } from "../../features/schedule/blockSchedule";
 import { Collection, type Source, type SyncRecord } from "./collection";
 import type { CollectionBinding } from "./engine";
@@ -63,6 +64,7 @@ export const store = {
   blocks: new Collection<ScheduleBlock>("schedule_blocks"),
   exceptions: new Collection<ScheduleException>("schedule_exceptions"),
   assignments: new Collection<Assignment>("assignments"),
+  emails: new Collection<EmailRecord>("emails"),
 };
 
 export const bindings = [
@@ -111,6 +113,26 @@ export const bindings = [
     url: "url",
     reminderMinutes: "reminder_minutes",
   }),
+  binding(store.emails, "emails", {
+    threadId: "thread_id",
+    fromName: "from_name",
+    fromEmail: "from_email",
+    subject: "subject",
+    snippet: "snippet",
+    receivedAt: "received_at",
+    labels: "labels",
+    unread: "unread",
+    category: "category",
+    summary: "summary",
+    summarySource: "summary_source",
+    hasDeadline: "has_deadline",
+    deadlineOn: "deadline_on",
+    needsReply: "needs_reply",
+    isSchool: "is_school",
+    importance: "importance",
+    webUrl: "web_url",
+    dismissed: "dismissed",
+  }, ["importance"]),
 ] as unknown as CollectionBinding<SyncRecord>[];
 
 export const allCollections = Object.values(store) as Collection<SyncRecord>[];

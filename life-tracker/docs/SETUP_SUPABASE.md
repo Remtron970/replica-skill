@@ -20,6 +20,7 @@ Run each file in `life-tracker/supabase/migrations/` **in order** (oldest first)
 2. `20261127010000_academics.sql` — classes, grades, terms, grading scales
 3. `20261127020000_integrations.sql` — school connections (stored encrypted)
 4. `20261127030000_schedule_assignments.sql` — block schedule, days off, assignments
+5. `20261127040000_email.sql` — email recap
 
 For each: **SQL Editor → New query**, paste the whole file, **Run**, and check it
 says "Success". (With the Supabase CLI you can instead run `supabase link` and

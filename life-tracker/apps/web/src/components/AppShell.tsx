@@ -31,7 +31,7 @@ export function AppShell() {
           e.preventDefault();
           document.getElementById("main")?.focus();
         }}
-        className="fixed top-2 left-2 z-[70] -translate-y-20 rounded-xl bg-brand-strong px-4 py-2 font-semibold text-on-brand focus:translate-y-0"
+        className="fixed top-2 left-2 z-[70] -translate-y-20 rounded-xl bg-brand-strong px-4 py-2 font-semibold text-on-brand focus-visible:translate-y-0"
       >
         Skip to content
       </a>

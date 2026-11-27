@@ -34,6 +34,19 @@ export function normalizeAcademic(raw: unknown): AcademicSettings {
   };
 }
 
+/** Email recap settings (synced). */
+export interface EmailSettings {
+  /** Summarize with Claude when the server has a key; off = built-in quick summaries only. */
+  ai: boolean;
+  /** Days to keep email summaries. */
+  retentionDays: 7 | 14 | 30 | 60;
+}
+export const DEFAULT_EMAIL_SETTINGS: EmailSettings = { ai: true, retentionDays: 30 };
+export function normalizeEmailSettings(raw: unknown): EmailSettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<EmailSettings>;
+  return { ai: r.ai !== false, retentionDays: [7, 14, 30, 60].includes(r.retentionDays as number) ? (r.retentionDays as EmailSettings["retentionDays"]) : 30 };
+}
+
 export interface Prefs {
   name: string;
   theme: ThemePref;
@@ -42,6 +55,7 @@ export interface Prefs {
   demo: boolean;
   academic: AcademicSettings;
   schedule: ScheduleSettings;
+  email: EmailSettings;
   /** ms since epoch of the last change on any device; 0 = never changed. */
   updatedAt: number;
 }
@@ -54,7 +68,7 @@ export const DASHBOARD_SECTIONS: { id: DashboardSectionId; label: string }[] = [
   { id: "important", label: "Important" },
 ];
 export const DEFAULT_DASHBOARD: DashboardItem[] = DASHBOARD_SECTIONS.map((s) => ({ id: s.id, visible: true }));
-export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, updatedAt: 0 };
+export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, email: DEFAULT_EMAIL_SETTINGS, updatedAt: 0 };
 
 /** Keep known sections in the saved order, drop junk/duplicates, append any new sections. */
 export function normalizeDashboard(raw: unknown): DashboardItem[] {
@@ -89,6 +103,7 @@ export function parsePrefs(json: string | null): Prefs {
       demo: raw.demo === true,
       academic: normalizeAcademic(raw.academic),
       schedule: normalizeScheduleSettings(raw.schedule),
+      email: normalizeEmailSettings(raw.email),
       updatedAt: typeof raw.updatedAt === "number" && raw.updatedAt > 0 ? raw.updatedAt : 0,
     };
   } catch {
@@ -107,6 +122,7 @@ export interface ProfileRow {
   demo_mode: boolean;
   academic_settings?: unknown;
   schedule_settings?: unknown;
+  email_settings?: unknown;
   prefs_updated_at: string;
 }
 
@@ -120,6 +136,7 @@ export function rowToPrefs(row: ProfileRow): Prefs {
     demo: row.demo_mode === true,
     academic: normalizeAcademic(row.academic_settings),
     schedule: normalizeScheduleSettings(row.schedule_settings),
+    email: normalizeEmailSettings(row.email_settings),
     updatedAt: Number.isFinite(t) && t > 0 ? t : 0,
   };
 }
@@ -134,6 +151,7 @@ export function prefsToRow(p: Prefs, timezone: string): Omit<ProfileRow, "id"> {
     demo_mode: p.demo,
     academic_settings: p.academic,
     schedule_settings: p.schedule,
+    email_settings: p.email,
     prefs_updated_at: new Date(p.updatedAt || 0).toISOString(),
   };
 }

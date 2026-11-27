@@ -100,7 +100,7 @@ export function SchoolConnections() {
   const connectGoogle = async () => {
     if (!supabase) return;
     setBusy("google");
-    const { data, error } = await supabase.functions.invoke("google-classroom-auth", { method: "POST" });
+    const { data, error } = await supabase.functions.invoke("google-auth", { method: "POST", body: { service: "classroom" } });
     setBusy(null);
     if (error || !data?.url) return toast({ tone: "error", title: "Couldn't start Google sign-in", body: await functionError(error) });
     window.location.assign(data.url);

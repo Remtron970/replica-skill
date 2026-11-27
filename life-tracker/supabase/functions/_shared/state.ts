@@ -16,7 +16,7 @@ export async function signState(secret: string, userId: string, ttlSeconds = 600
   return `${payload}.${await hmac(secret, payload)}`;
 }
 
-/** Returns the user id if the state is genuine and unexpired, else null. */
+/** Returns the subject (e.g. "<user id>~gmail") if the state is genuine and unexpired, else null. */
 export async function verifyState(secret: string, state: string, now = Date.now()): Promise<string | null> {
   const parts = state.split(".");
   if (parts.length !== 4) return null;
@@ -27,5 +27,5 @@ export async function verifyState(secret: string, state: string, now = Date.now(
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
   if (diff !== 0) return null;
   if (!/^\d+$/.test(exp) || Number(exp) * 1000 < now) return null;
-  return /^[0-9a-f-]{36}$/i.test(userId) ? userId : null;
+  return /^[0-9a-f-]{36}(~(classroom|gmail))?$/i.test(userId) ? userId : null;
 }

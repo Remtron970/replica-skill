@@ -39,7 +39,7 @@ export class SyncError extends Error {
   }
 }
 
-async function getJson(f: typeof fetch, url: string, token: string) {
+export async function getJson(f: typeof fetch, url: string, token: string) {
   const res = await f(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
   if (res.status === 401) throw new SyncError("Access expired or was revoked. Reconnect to continue syncing.", "expired");
   if (res.status === 403) {

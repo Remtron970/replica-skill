@@ -211,3 +211,45 @@ Your school: **modified block** schedule; Canvas, Google Classroom, StudentVUE.
 - Reminders only appear while Life Tracker is open until Phase 11 (push).
 
 **Next step:** Phase 6 — Email (Gmail).
+
+## Phase 6 — Email recap (2026-11-27)
+You chose: **school email**, plus a **paste** fallback in case the school blocks apps.
+
+**Completed**
+- Gmail (read-only, `gmail.readonly`) through one Google sign-in function for
+  Classroom and Gmail (`google-auth`); clear "Blocked by school" handling.
+- `email-sync`: first 3 days, then new mail since the last check; analyzes new
+  messages (max 40 per run), refreshes read status, expires summaries after the
+  retention period (30 days default). Full email bodies are never stored.
+- Analysis: Claude via the Anthropic SDK with structured (schema-checked) output;
+  email text is passed as untrusted data; refusals/errors/bad output fall back to
+  the built-in rules. Model: `claude-opus-5-5` (low effort), switch with
+  `EMAIL_MODEL=claude-haiku-5-5`.
+- Built-in quick summaries (same code on server and device): category, first real
+  sentence, deadlines ("by Friday", "12/4", "Dec 4", "tomorrow", "next Monday"),
+  reply needed, school mail (school domain or keywords), importance.
+- Email screen: daily recap (yesterday), category filters, detail with AI/built-in
+  label, Open in Gmail, Add to Assignments from an email's deadline, Hide;
+  Paste an email (AI via server when signed in, else built-in on the device);
+  settings (AI on/off, keep for 7/14/30/60 days, disconnect).
+- Home: unread count, important emails in Important, email lines in the briefing.
+
+**Verified**
+- Unit: 223 tests (Gmail parsing incl. MIME/HTML/quoted replies; deadline phrases;
+  rules; Claude request/validation/fallbacks with a fake client; email sync end
+  to end with fake Gmail + database incl. retention and keeping a newer dismiss).
+- Database: 27 checks. End-to-end: 151 checks incl. paste → summary → assignment,
+  and recap / AI label / Check now / AI paste against a simulated Supabase.
+
+**Fixed along the way**
+- Server refreshes could have overwritten a not-yet-uploaded "done"/"dismiss"
+  from a device (school sync too) — now stamped just after the row's own time.
+- `school-sync` would have tried to run Gmail as a school platform.
+- "by Friday" received on a Friday meant next week; now means today.
+- After closing a sheet, focus could land on the "Skip to content" link.
+
+**Not verified yet (needs your setup)**
+- Real Gmail (and whether your school allows it) and real Claude calls — no API
+  key or Google project exists yet. See docs/SETUP_EMAIL.md.
+
+**Next step:** Phase 7 — Health.

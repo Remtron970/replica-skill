@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -11,7 +15,24 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
-    "types": ["vite/client", "vite-plugin-pwa/react", "node"]
+    "types": [
+      "vite/client",
+      "vite-plugin-pwa/react",
+      "node"
+    ],
+    "paths": {
+      "zod/v4": [
+        "./node_modules/zod/v4/index.d.ts"
+      ],
+      "@anthropic-ai/sdk/helpers/zod": [
+        "./node_modules/@anthropic-ai/sdk/helpers/zod.d.ts"
+      ],
+      "@anthropic-ai/sdk": [
+        "./node_modules/@anthropic-ai/sdk/index.d.ts"
+      ]
+    }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }
