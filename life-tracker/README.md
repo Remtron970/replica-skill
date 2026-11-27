@@ -11,6 +11,7 @@ and desktop browsers.
 | Phase | State |
 |---|---|
 | 1. Planning & architecture | ✅ Complete — awaiting approval |
+| Preview app (`apps/web`) | ✅ Runs: navigation for all 11 sections, Home with live greeting/clock, Settings (name, theme, phone tabs), app icon |
 | 2–12 | Not started |
 
 ## Documentation
@@ -21,3 +22,13 @@ and desktop browsers.
 - [Roadmap](docs/ROADMAP.md) — the 12 phases and their acceptance criteria
 - [Setup checklist](docs/SETUP_CHECKLIST.md) — accounts and keys, by phase
 - [Progress log](PROGRESS.md)
+
+## Run the preview app
+
+```bash
+cd apps/web
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # type-check + production build into dist/
+npm run icons      # re-render PNG icons from public/icon.svg
+```

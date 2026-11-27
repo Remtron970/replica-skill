@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9A3D"/>
+      <stop offset="0.55" stop-color="#FF7A1A"/>
+      <stop offset="1" stop-color="#C2541A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.38" r="0.45">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <circle cx="512" cy="420" r="330" fill="url(#glow)"/>
+  <!-- bulb -->
+  <path d="M512 214c-128 0-226 98-226 222 0 78 38 136 86 182 30 29 46 58 50 92h180c4-34 20-63 50-92 48-46 86-104 86-182 0-124-98-222-226-222z"
+        fill="#FFFFFF"/>
+  <!-- check-mark filament -->
+  <path d="M430 440l58 58 108-116" fill="none" stroke="#FF7A1A" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- base -->
+  <rect x="412" y="742" width="200" height="40" rx="20" fill="#FFFFFF"/>
+  <rect x="436" y="806" width="152" height="38" rx="19" fill="#FFFFFF" opacity="0.9"/>
+</svg>
