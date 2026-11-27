@@ -8,6 +8,7 @@ import { usePrefs } from "../lib/prefs";
 import { Logo, Wordmark } from "./Brand";
 import { Sheet } from "./ui";
 import { UpdatePrompt } from "./UpdatePrompt";
+import { AssignmentReminders } from "../features/assignments/Reminders";
 
 const IS_PREVIEW = import.meta.env.VITE_PREVIEW === "1";
 
@@ -47,6 +48,7 @@ export function AppShell() {
       <TabBar onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
       {!IS_PREVIEW && <UpdatePrompt />}
+      <AssignmentReminders />
     </div>
   );
 }

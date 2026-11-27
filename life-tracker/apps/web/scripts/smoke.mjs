@@ -62,7 +62,7 @@ async function settle(page, ms = 500) {
 // exercise sign-in, profile sync and account deletion end to end.
 // ---------------------------------------------------------------------------
 const SB = "https://test-project.supabase.co";
-const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses"];
+const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments"];
 async function cloudChecks() {
   const USER = { id: "8b0f7a52-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "remy@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
   const calls = [];
@@ -228,7 +228,8 @@ async function cloudChecks() {
   await c.waitForTimeout(1500);
   ok(calls.some((x) => x.path === "/rest/v1/rpc/delete_my_account" && x.method === "POST" && x.auth === "Bearer test-access"), "delete account calls delete_my_account as the user");
   await settle(c, 800);
-  ok(await c.evaluate(() => !Object.keys(localStorage).some((k) => k.startsWith("lt."))), "device data cleared after deleting the account");
+  // Only the reminder checker's "last checked" timestamp may remain: no settings, classes, grades, schedule or assignments.
+  ok(await c.evaluate(() => !Object.keys(localStorage).some((k) => k === "lt.prefs" || k.startsWith("lt.c."))), "device data cleared after deleting the account");
   await ctx.close();
 }
 
@@ -497,6 +498,118 @@ try {
     await g.getByRole("heading", { name: "At a glance" }).scrollIntoViewIfNeeded();
     await g.waitForTimeout(1200);
     ok((await g.getByRole("button", { name: /Current GPA/ }).innerText()).includes("2.50"), "Home shows the real GPA");
+    await ctx.close();
+  }
+
+  console.log("\nSchedule (modified block) and assignments — clock: Wed 25 Nov 2026, 8:25 AM");
+  {
+    const ctx = await browser.newContext({ ...devices["iPhone 15"] });
+    const p = await ctx.newPage();
+    watch(p, "schedule");
+    await p.clock.setSystemTime(new Date(2026, 10, 25, 8, 25));
+    await p.goto(`${URL}#/schedule`);
+    await settle(p);
+    await p.getByRole("button", { name: /Modified block/ }).click();
+    await settle(p, 500);
+    ok(await p.getByText(/Check: today \(Wednesday\) is/).isVisible(), "modified-block setup asks to confirm which day today is");
+    const addBlock = async (dayType, name, start, end) => {
+      await p.getByRole("region", { name: dayType }).getByRole("button", { name: "Add class" }).click();
+      const d = p.getByRole("dialog");
+      await d.getByRole("textbox", { name: "Name" }).fill(name);
+      await d.getByLabel("Starts").fill(start);
+      await d.getByLabel("Ends").fill(end);
+      await d.getByRole("button", { name: "Add class" }).click();
+      await d.waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+    };
+    await addBlock("All classes", "Biology", "08:00", "08:45");
+    await addBlock("A day", "Biology", "08:00", "09:30");
+    await addBlock("A day", "English", "09:40", "11:10");
+    await addBlock("B day", "Chemistry", "08:00", "09:30");
+    await p.getByRole("region", { name: "A day" }).getByRole("button", { name: "Add class" }).click();
+    let d = p.getByRole("dialog");
+    await d.getByRole("textbox", { name: "Name" }).fill("Assembly");
+    await d.getByLabel("Starts").fill("09:00");
+    await d.getByLabel("Ends").fill("10:00");
+    ok(await d.getByText(/Overlaps with Biology/).isVisible(), "warns when class times overlap");
+    await p.keyboard.press("Escape");
+    await d.waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+    ok(await p.getByText(/Check: today \(Wednesday\) is A day/).isVisible(), "today starts as an A day");
+    const vs = await axe(p);
+    ok(vs.length === 0, `schedule setup passes axe${vs.length ? ": " + vs.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (vs.length) for (const x of vs) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+
+    await p.getByRole("radio", { name: "Month" }).click();
+    await settle(p, 400);
+    await p.getByRole("gridcell", { name: /Thursday, November 26/ }).click();
+    d = p.getByRole("dialog");
+    await d.getByRole("radio", { name: /No school/ }).click();
+    await d.getByRole("textbox", { name: /Note/ }).fill("Thanksgiving");
+    await d.getByRole("button", { name: "Save" }).click();
+    await d.waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+    ok(await p.getByRole("gridcell", { name: "Thursday, November 26: Thanksgiving" }).isVisible(), "a day can be marked no school");
+    ok(await p.getByRole("gridcell", { name: "Friday, November 27: B day" }).isVisible(), "rotation skips the day off (Fri is B)");
+    ok(await p.getByRole("gridcell", { name: "Monday, November 30: All classes" }).isVisible(), "Monday is all classes");
+    ok(await p.getByRole("gridcell", { name: "Tuesday, December 1: A day" }).isVisible(), "rotation continues across the weekend (Tue is A)");
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/phone-schedule-month.png` });
+
+    await p.getByRole("radio", { name: "Today" }).click();
+    await settle(p, 400);
+    ok(await p.getByText("Happening now").isVisible() && (await p.locator("li[aria-current=time]").innerText()).includes("Biology"), "Today: Biology happening now on an A day");
+    ok(await p.getByText(/Next: English at 9:40/).isVisible(), "Today: next class English");
+    const vt = await axe(p);
+    ok(vt.length === 0, `schedule Today passes axe${vt.length ? ": " + vt.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/phone-schedule-today.png`, fullPage: true });
+    await p.getByRole("radio", { name: "Week" }).click();
+    await settle(p, 400);
+    ok((await p.locator("main").innerText()).includes("Thanksgiving"), "Week view shows the day off");
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/phone-schedule-week.png`, fullPage: true });
+
+    // Assignments
+    await p.goto(`${URL}#/assignments`);
+    await settle(p);
+    const addAssignment = async (title, date, time, extra) => {
+      await p.getByRole("button", { name: /Add (an )?assignment/ }).first().click();
+      const f = p.getByRole("dialog");
+      await f.getByRole("textbox", { name: "Assignment" }).fill(title);
+      if (date) await f.getByLabel("Due date").fill(date);
+      if (time) await f.getByLabel("Time (optional)").fill(time);
+      if (extra) await extra(f);
+      await f.getByRole("button", { name: "Add assignment" }).click();
+      await f.waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+    };
+    await addAssignment("Lab report", "2026-11-26", "23:59", async (f) => {
+      await f.getByRole("radio", { name: "High" }).click();
+      await f.getByRole("combobox", { name: "Reminder" }).selectOption({ label: "1 day before" });
+    });
+    await addAssignment("Read chapter 5", "", "");
+    await addAssignment("Essay draft", "2026-11-24", "");
+    const main = p.locator("main");
+    ok(await main.getByRole("heading", { name: /^Overdue/ }).isVisible(), "overdue group");
+    ok(await main.getByRole("heading", { name: /^Due tomorrow/ }).isVisible(), "due-tomorrow group");
+    ok(await main.getByRole("heading", { name: /^No due date/ }).isVisible(), "no-due-date group");
+    ok((await main.innerText()).includes("High"), "high priority shown");
+    await p.getByRole("checkbox", { name: "Mark Read chapter 5 done" }).click();
+    await settle(p, 600);
+    ok(await p.getByText("Marked done").isVisible(), "checking off confirms with undo");
+    ok(await p.getByRole("button", { name: /^Done/ }).isVisible(), "done items move to Done");
+    const va = await axe(p);
+    ok(va.length === 0, `Assignments passes axe${va.length ? ": " + va.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (va.length) for (const x of va) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/phone-assignments.png`, fullPage: true });
+
+    // Home uses the real schedule and assignments
+    await p.goto(URL);
+    await settle(p, 1000);
+    const home = await p.locator("main").innerText();
+    ok(home.includes("A day · 2 classes"), "Home: today's schedule shows the day type");
+    ok(/It's an A day: you have 2 classes today/.test(home), "briefing names the day type");
+    ok(home.includes("Essay draft"), "Home: overdue assignment in Important");
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/phone-home-schedule.png`, fullPage: true });
+
+    // In-app reminder: Lab report (due Thu 11:59 PM) reminds 1 day before = Wed 11:59 PM.
+    await p.clock.setSystemTime(new Date(2026, 10, 25, 23, 59, 20));
+    await p.waitForTimeout(35_000);
+    ok(await p.getByText("Reminder: this is due soon.").isVisible(), "assignment reminder appears while the app is open");
     await ctx.close();
   }
 

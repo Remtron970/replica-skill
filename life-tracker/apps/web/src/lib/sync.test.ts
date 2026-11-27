@@ -19,6 +19,7 @@ describe("parsePrefs", () => {
       ],
       demo: true,
       academic: { scaleId: "11111111-2222-4333-8444-555555555555", bonus: { regular: 0, honors: 0.5, ap: 1, ib: 1, dual: 0.5, other: 0 } },
+      schedule: { schoolDays: [1, 2, 3, 4, 5], fixed: { "1": "t-all" }, rotation: ["t-a", "t-b"], anchorDate: "2026-11-24", anchorIndex: 0, termStart: null, termEnd: "2027-06-10" },
       updatedAt: 1_700_000_000_000,
     };
     expect(parsePrefs(JSON.stringify(p))).toEqual(p);

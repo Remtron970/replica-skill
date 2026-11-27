@@ -1,4 +1,5 @@
 import { DEFAULT_PINS, PINNABLE, type SectionId } from "../app/sections";
+import { DEFAULT_SCHEDULE_SETTINGS, normalizeScheduleSettings, type ScheduleSettings } from "../features/schedule/blockSchedule";
 
 /** Preferences that follow the user across devices (stored in `profiles`). */
 export type ThemePref = "system" | "light" | "dark";
@@ -40,6 +41,7 @@ export interface Prefs {
   dashboard: DashboardItem[];
   demo: boolean;
   academic: AcademicSettings;
+  schedule: ScheduleSettings;
   /** ms since epoch of the last change on any device; 0 = never changed. */
   updatedAt: number;
 }
@@ -52,7 +54,7 @@ export const DASHBOARD_SECTIONS: { id: DashboardSectionId; label: string }[] = [
   { id: "important", label: "Important" },
 ];
 export const DEFAULT_DASHBOARD: DashboardItem[] = DASHBOARD_SECTIONS.map((s) => ({ id: s.id, visible: true }));
-export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, updatedAt: 0 };
+export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, updatedAt: 0 };
 
 /** Keep known sections in the saved order, drop junk/duplicates, append any new sections. */
 export function normalizeDashboard(raw: unknown): DashboardItem[] {
@@ -86,6 +88,7 @@ export function parsePrefs(json: string | null): Prefs {
       dashboard: normalizeDashboard(raw.dashboard),
       demo: raw.demo === true,
       academic: normalizeAcademic(raw.academic),
+      schedule: normalizeScheduleSettings(raw.schedule),
       updatedAt: typeof raw.updatedAt === "number" && raw.updatedAt > 0 ? raw.updatedAt : 0,
     };
   } catch {
@@ -103,6 +106,7 @@ export interface ProfileRow {
   dashboard_layout: unknown;
   demo_mode: boolean;
   academic_settings?: unknown;
+  schedule_settings?: unknown;
   prefs_updated_at: string;
 }
 
@@ -115,6 +119,7 @@ export function rowToPrefs(row: ProfileRow): Prefs {
     dashboard: normalizeDashboard(row.dashboard_layout),
     demo: row.demo_mode === true,
     academic: normalizeAcademic(row.academic_settings),
+    schedule: normalizeScheduleSettings(row.schedule_settings),
     updatedAt: Number.isFinite(t) && t > 0 ? t : 0,
   };
 }
@@ -128,6 +133,7 @@ export function prefsToRow(p: Prefs, timezone: string): Omit<ProfileRow, "id"> {
     dashboard_layout: p.dashboard,
     demo_mode: p.demo,
     academic_settings: p.academic,
+    schedule_settings: p.schedule,
     prefs_updated_at: new Date(p.updatedAt || 0).toISOString(),
   };
 }

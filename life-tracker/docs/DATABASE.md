@@ -3,7 +3,8 @@
 > **Implemented so far** (see `supabase/migrations/`): `profiles` (incl.
 > `academic_settings`), `terms`, `grading_scales`, `courses`,
 > `grade_categories`, `grade_items`, `past_courses`, `integrations`,
-> `integration_tokens`, `sync_runs`. The rest of this document is the plan for
+> `integration_tokens`, `sync_runs`, `day_types`, `schedule_blocks`,
+> `schedule_exceptions`, `assignments` (and `profiles.schedule_settings`). The rest of this document is the plan for
 > later phases.
 >
 > **Sync model** (all synced tables): `id` is created on the device so records

@@ -18,6 +18,8 @@ const DesignPage = lazy(() => import("./features/design/DesignPage").then((m) =>
 const AccountPage = lazy(() => import("./features/account/AccountPage").then((m) => ({ default: m.AccountPage })));
 const AcademicsPage = lazy(() => import("./features/academics/AcademicsPage").then((m) => ({ default: m.AcademicsPage })));
 const CoursePage = lazy(() => import("./features/academics/CoursePage").then((m) => ({ default: m.CoursePage })));
+const SchedulePage = lazy(() => import("./features/schedule/SchedulePage").then((m) => ({ default: m.SchedulePage })));
+const AssignmentsPage = lazy(() => import("./features/assignments/AssignmentsPage").then((m) => ({ default: m.AssignmentsPage })));
 const ImportPage = lazy(() => import("./features/academics/ImportPage").then((m) => ({ default: m.ImportPage })));
 
 const page = (el: React.ReactNode) => <Suspense fallback={<PageLoading />}>{el}</Suspense>;
@@ -53,6 +55,8 @@ const routes: RouteObject[] = [
       { path: "academics", element: page(<AcademicsPage />) },
       { path: "academics/import", element: page(<ImportPage />) },
       { path: "academics/:courseId", element: page(<CoursePage />) },
+      { path: "schedule", element: page(<SchedulePage />) },
+      { path: "assignments", element: page(<AssignmentsPage />) },
       {
         path: "design",
         element: (
@@ -61,7 +65,7 @@ const routes: RouteObject[] = [
           </Suspense>
         ),
       },
-      ...SECTIONS.filter((s) => !["home", "settings", "academics"].includes(s.id)).map((s) => ({
+      ...SECTIONS.filter((s) => !["home", "settings", "academics", "schedule", "assignments"].includes(s.id)).map((s) => ({
         path: s.path.slice(1),
         element: <SectionPage section={s} />,
       })),

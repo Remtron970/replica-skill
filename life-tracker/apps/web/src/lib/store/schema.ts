@@ -1,4 +1,6 @@
 import type { Course, GradeCategory, GradeItem, GradingScale, PastCourse, Term } from "../../features/academics/types";
+import type { Assignment } from "../../features/assignments/types";
+import type { DayType, ScheduleBlock, ScheduleException } from "../../features/schedule/blockSchedule";
 import { Collection, type Source, type SyncRecord } from "./collection";
 import type { CollectionBinding } from "./engine";
 
@@ -57,6 +59,10 @@ export const store = {
   categories: new Collection<GradeCategory>("grade_categories"),
   items: new Collection<GradeItem>("grade_items"),
   pastCourses: new Collection<PastCourse>("past_courses"),
+  dayTypes: new Collection<DayType>("day_types"),
+  blocks: new Collection<ScheduleBlock>("schedule_blocks"),
+  exceptions: new Collection<ScheduleException>("schedule_exceptions"),
+  assignments: new Collection<Assignment>("assignments"),
 };
 
 export const bindings = [
@@ -89,6 +95,22 @@ export const bindings = [
     notes: "notes",
   }, ["earned", "possible"]),
   binding(store.pastCourses, "past_courses", { termName: "term_name", name: "name", credits: "credits", level: "level", letter: "letter", points: "points" }, ["credits", "points"]),
+  binding(store.dayTypes, "day_types", { name: "name", short: "short", sort: "sort" }, ["sort"]),
+  binding(store.blocks, "schedule_blocks", { dayTypeId: "day_type_id", courseId: "course_id", title: "title", room: "room", teacher: "teacher", start: "start_time", end: "end_time" }),
+  binding(store.exceptions, "schedule_exceptions", { date: "date", kind: "kind", dayTypeId: "day_type_id", note: "note" }),
+  binding(store.assignments, "assignments", {
+    courseId: "course_id",
+    title: "title",
+    description: "description",
+    dueAt: "due_at",
+    dueHasTime: "due_has_time",
+    priority: "priority",
+    status: "status",
+    completedAt: "completed_at",
+    submitted: "submitted",
+    url: "url",
+    reminderMinutes: "reminder_minutes",
+  }),
 ] as unknown as CollectionBinding<SyncRecord>[];
 
 export const allCollections = Object.values(store) as Collection<SyncRecord>[];

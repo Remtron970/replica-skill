@@ -250,4 +250,7 @@ life-tracker/
 | 2026-11-27 | Local-first collections + per-row last-write-wins sync (`src/lib/store/`) | Grades work offline and signed-out; one tested engine reused by every later data type |
 | 2026-11-27 | Grades computed by the app, not taken from the platform | Same math for manual, imported and synced classes, and what-if works everywhere; "Portal %" mode for anyone who prefers the school's number |
 | 2026-11-27 | School tokens only in server functions, AES-GCM encrypted, unreadable via the API | A stolen phone or a bug in the app can't leak school credentials |
+| 2026-11-27 | Block schedules as day types + fixed weekdays + continuous rotation + per-date exceptions | Covers modified block, A/B, A/B/C and plain schedules; days off don't consume rotation days |
+| 2026-11-27 | Synced assignments keep the student's priority, progress and reminder | Teacher-owned fields (title, due date) refresh each sync; student-owned fields never get overwritten |
+| 2026-11-27 | Reminders shown in-app until push (Phase 11) | Real, working reminders now without pretending notifications exist |
 | 2026-11-27 | PowerSchool / Infinite Campus via copy-paste import | No student-authorized API exists; avoids asking for school passwords |

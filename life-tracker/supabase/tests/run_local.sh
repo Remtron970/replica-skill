@@ -16,4 +16,4 @@ trap cleanup EXIT
 PSQL=("${RUN[@]}" "$BIN/psql" -h "$DATA" -p "$PORT" -U postgres -d postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -f "$HERE/auth_shim.sql"
 for f in "$ROOT"/migrations/*.sql; do echo "applying $(basename "$f")"; "${PSQL[@]}" -f "$f"; done
-for t in rls_test.sql sync_test.sql integrations_test.sql; do "${PSQL[@]}" -f "$HERE/$t" 2>&1 | sed -e "s/^psql:.*NOTICE:  /  /" -e "/^ *$/d"; done
+for t in rls_test.sql sync_test.sql integrations_test.sql schedule_test.sql; do "${PSQL[@]}" -f "$HERE/$t" 2>&1 | sed -e "s/^psql:.*NOTICE:  /  /" -e "/^ *$/d"; done

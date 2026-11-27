@@ -14,7 +14,8 @@ and desktop browsers.
 | 2. Design system & main interface | ✅ Complete |
 | 3. Home dashboard, sign-in, sync | ✅ Complete — cloud sync waiting for your Supabase project |
 | 4. Academics | ✅ Complete — Canvas/Classroom connections waiting for setup |
-| 5–12 | Not started |
+| 5. Schedule & assignments | ✅ Complete |
+| 6–12 | Not started |
 
 ## Documentation
 - [Architecture](docs/ARCHITECTURE.md) — stack, system design, security, offline, AI

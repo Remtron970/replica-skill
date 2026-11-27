@@ -17,6 +17,7 @@ export interface Existing {
   courses: Row[];
   grade_categories: Row[];
   grade_items: Row[];
+  assignments: Row[];
 }
 
 export interface Plan {
@@ -24,27 +25,37 @@ export interface Plan {
   courses: Record<string, unknown>[];
   grade_categories: Record<string, unknown>[];
   grade_items: Record<string, unknown>[];
+  assignments: Record<string, unknown>[];
   /**
    * Ids to mark deleted with a plain UPDATE (an upsert of a partial row would
    * fail Postgres's NOT NULL checks before the conflict is detected).
    */
-  deleted: { courses: string[]; grade_categories: string[]; grade_items: string[] };
+  deleted: { courses: string[]; grade_categories: string[]; grade_items: string[]; assignments: string[] };
 }
 
-const SAME_KEYS = ["name", "teacher", "room", "grading_mode", "course_id", "category_id", "title", "earned", "possible", "graded_on", "due_on", "excused", "missing", "weight", "sort", "deleted"];
+const SAME_KEYS = ["name", "teacher", "room", "grading_mode", "course_id", "category_id", "title", "earned", "possible", "graded_on", "due_on", "excused", "missing", "weight", "sort", "deleted", "description", "due_at", "due_has_time", "url", "submitted"];
+
+/** Same instant? (Postgres returns "2026-09-20T05:59:59+00:00", platforms send "…Z".) */
+const sameTime = (a: unknown, b: unknown) => typeof a === "string" && typeof b === "string" && Date.parse(a) === Date.parse(b);
 
 /** True if writing `next` over `prev` would change anything the user can see. */
 function changed(prev: Row | undefined, next: Record<string, unknown>) {
   if (!prev) return true;
-  return SAME_KEYS.some((k) => k in next && (prev[k] ?? null) !== (next[k] ?? null) && !(typeof prev[k] === "string" && typeof next[k] === "number" && Number(prev[k]) === next[k]));
+  return SAME_KEYS.some(
+    (k) =>
+      k in next &&
+      (prev[k] ?? null) !== (next[k] ?? null) &&
+      !(typeof prev[k] === "string" && typeof next[k] === "number" && Number(prev[k]) === next[k]) &&
+      !(k === "due_at" && sameTime(prev[k], next[k])),
+  );
 }
 
 export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: { userId: string; source: Source; now: string; newId: () => string }): Plan {
   const { userId, source, now, newId } = opts;
   const mine = (rows: Row[]) => new Map(rows.filter((r) => r.source === source && r.external_id).map((r) => [r.external_id as string, r]));
-  const ex = { courses: mine(existing.courses), cats: mine(existing.grade_categories), items: mine(existing.grade_items) };
+  const ex = { courses: mine(existing.courses), cats: mine(existing.grade_categories), items: mine(existing.grade_items), tasks: mine(existing.assignments ?? []) };
   const base = (id: string, externalId: string) => ({ id, user_id: userId, client_updated_at: now, deleted: false, source, external_id: externalId });
-  const plan: Plan = { courses: [], grade_categories: [], grade_items: [], deleted: { courses: [], grade_categories: [], grade_items: [] } };
+  const plan: Plan = { courses: [], grade_categories: [], grade_items: [], assignments: [], deleted: { courses: [], grade_categories: [], grade_items: [], assignments: [] } };
 
   const courseId = new Map<string, string>();
   for (const c of mapped.courses) {
@@ -94,13 +105,38 @@ export function planSchoolSync(mapped: MappedSchool, existing: Existing, opts: {
     if (changed(prev, row)) plan.grade_items.push(row);
   }
 
+  for (const a of mapped.assignments) {
+    const cid = courseId.get(a.courseExternalId);
+    if (!cid) continue;
+    const prev = ex.tasks.get(a.externalId);
+    const row = {
+      ...base(prev?.id ?? newId(), a.externalId),
+      course_id: cid,
+      title: a.title,
+      description: a.description,
+      due_at: a.dueAt,
+      due_has_time: a.dueHasTime,
+      url: a.url,
+      submitted: a.submitted,
+      // First time only; afterwards priority, progress and reminders belong to the user.
+      ...(prev ? {} : { priority: "normal", status: "todo", completed_at: null, reminder_minutes: null }),
+    };
+    if (changed(prev, row)) plan.assignments.push(row);
+  }
+
   // Gone from the platform → deleted here too.
-  const seen = { courses: new Set(mapped.courses.map((c) => c.externalId)), cats: new Set(mapped.categories.map((c) => c.externalId)), items: new Set(mapped.items.map((i) => i.externalId)) };
+  const seen = {
+    courses: new Set(mapped.courses.map((c) => c.externalId)),
+    cats: new Set(mapped.categories.map((c) => c.externalId)),
+    items: new Set(mapped.items.map((i) => i.externalId)),
+    tasks: new Set(mapped.assignments.map((a) => a.externalId)),
+  };
   const gone = (m: Map<string, Row>, keep: Set<string>, into: string[]) => {
     for (const [ext, r] of m) if (!keep.has(ext) && !r.deleted) into.push(r.id);
   };
   gone(ex.courses, seen.courses, plan.deleted.courses);
   gone(ex.cats, seen.cats, plan.deleted.grade_categories);
   gone(ex.items, seen.items, plan.deleted.grade_items);
+  gone(ex.tasks, seen.tasks, plan.deleted.assignments);
   return plan;
 }

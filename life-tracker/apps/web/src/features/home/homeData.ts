@@ -1,7 +1,8 @@
 import { averagePercent, unweightedGpa } from "../../lib/gpa";
 import type { CourseSummary } from "../academics/grades";
 import type { GradeItem } from "../academics/types";
-import { scheduleStatus, type ClassBlock } from "../../lib/schedule";
+import { scheduleStatus, type ClassBlock, type DayProvider } from "../../lib/schedule";
+import type { Assignment as StoredAssignment } from "../assignments/types";
 
 /**
  * Everything the Home dashboard and the daily briefing read. In "live" mode it
@@ -80,6 +81,10 @@ export interface HomeData {
   tasks?: { done: number; total: number };
   /** GPA and average, computed with the user's own grading settings. */
   grades?: { gpa: number | null; average: number | null };
+  /** The user's block schedule (when set up); otherwise `schedule` is used. */
+  scheduleFor?: DayProvider;
+  /** Day type name for a date, e.g. "A day". */
+  dayLabel?: (d: Date) => string | null;
 }
 
 const NONE: Record<SourceId, boolean> = { grades: false, school: false, email: false, health: false, news: false, calendar: false, tasks: false };
@@ -90,6 +95,18 @@ export interface LiveInputs {
   items: GradeItem[];
   gpa: number | null;
   average: number | null;
+  schedule?: { forDay: DayProvider; labelFor: (d: Date) => string | null; isSetUp: boolean };
+  assignments?: StoredAssignment[];
+  courseNames?: Map<string, string>;
+}
+
+/** Due time for an assignment (date-only due dates count as 11:59 PM that day). */
+export function dueDate(a: Pick<StoredAssignment, "dueAt" | "dueHasTime">): Date | null {
+  if (!a.dueAt) return null;
+  const d = new Date(a.dueAt);
+  if (Number.isNaN(d.getTime())) return null;
+  if (!a.dueHasTime) d.setHours(23, 59, 0, 0);
+  return d;
 }
 
 /**
@@ -98,6 +115,9 @@ export interface LiveInputs {
  */
 export function liveData(input?: LiveInputs, now = new Date()): HomeData {
   const hasGrades = !!input && input.summaries.length > 0;
+  const hasSchedule = !!input?.schedule?.isSetUp;
+  const stored = (input?.assignments ?? []).filter((a) => !a.deleted);
+  const hasSchool = hasSchedule || stored.length > 0;
   const nameOf = new Map(input?.summaries.map((s) => [s.course.id, s.course.name]) ?? []);
   const gradeUpdates: GradeUpdate[] = hasGrades
     ? input!.items
@@ -107,10 +127,14 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     : [];
   return {
     mode: "live",
-    connected: { ...NONE, grades: hasGrades },
+    connected: { ...NONE, grades: hasGrades, school: hasSchool },
     courses: hasGrades ? input!.summaries.filter((s) => s.result.percent !== null).map((s) => ({ id: s.course.id, name: s.course.name, teacher: s.course.teacher, percent: s.result.percent as number, credits: s.course.credits })) : [],
     schedule: [],
-    assignments: [],
+    scheduleFor: hasSchedule ? input!.schedule!.forDay : undefined,
+    dayLabel: hasSchedule ? input!.schedule!.labelFor : undefined,
+    assignments: stored
+      .map((a) => ({ id: a.id, title: a.title, course: (a.courseId && input?.courseNames?.get(a.courseId)) || "", dueAt: dueDate(a), done: a.status === "done" || a.submitted }))
+      .filter((a): a is Assignment => a.dueAt !== null),
     emails: [],
     events: [],
     gradeUpdates,
@@ -253,8 +277,8 @@ export function importantItems(d: HomeData, now: Date, limit = 6): ImportantItem
   for (const a of d.assignments) {
     if (a.done) continue;
     const due = a.dueAt.getTime();
-    if (due < t) items.push({ id: a.id, kind: "overdue", title: a.title, detail: `${a.course} · was due ${relDay(a.dueAt, now)}`, at: a.dueAt, to: "/assignments", rank: 0 });
-    else if (due - t <= 2 * DAY) items.push({ id: a.id, kind: "due", title: a.title, detail: `${a.course} · due ${relDay(a.dueAt, now)} at ${time(a.dueAt)}`, at: a.dueAt, to: "/assignments", rank: 1 });
+    if (due < t) items.push({ id: a.id, kind: "overdue", title: a.title, detail: [a.course, `was due ${relDay(a.dueAt, now)}`].filter(Boolean).join(" · "), at: a.dueAt, to: "/assignments", rank: 0 });
+    else if (due - t <= 2 * DAY) items.push({ id: a.id, kind: "due", title: a.title, detail: [a.course, `due ${relDay(a.dueAt, now)} at ${time(a.dueAt)}`].filter(Boolean).join(" · "), at: a.dueAt, to: "/assignments", rank: 1 });
   }
   for (const e of d.emails) if (e.important) items.push({ id: e.id, kind: "email", title: e.subject, detail: `From ${e.from}`, at: e.receivedAt, to: "/email", rank: 2 });
   for (const g of d.gradeUpdates)
@@ -295,10 +319,11 @@ export function buildBriefing(d: HomeData, now: Date): Briefing {
   const unavailable = (Object.keys(SOURCES) as SourceId[]).filter((s) => !d.connected[s]).map((s) => SOURCES[s]);
 
   if (d.connected.school) {
-    const st = scheduleStatus(d.schedule, now);
+    const st = scheduleStatus(d.scheduleFor ?? d.schedule, now);
     const classes = st.today.filter((o) => o.block.id !== "lunch" && o.block.title !== "Lunch");
+    const label = d.dayLabel?.(now);
     if (classes.length) {
-      summary.push(`You have ${plural(classes.length, "class", "classes")} today, starting with ${classes[0].block.title} at ${time(classes[0].start)}.`);
+      summary.push(`${label ? `It's ${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}: you` : "You"} have ${plural(classes.length, "class", "classes")} today, starting with ${classes[0].block.title} at ${time(classes[0].start)}.`);
       sections.push({ title: "Classes", lines: classes.map((o) => `${time(o.start)} — ${o.block.title}${o.block.room ? ` (${o.block.room})` : ""}`) });
     } else {
       summary.push("No classes today.");
@@ -308,17 +333,17 @@ export function buildBriefing(d: HomeData, now: Date): Briefing {
     const open = d.assignments.filter((a) => !a.done).sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
     const overdue = open.filter((a) => a.dueAt.getTime() < t);
     const upcoming = open.filter((a) => a.dueAt.getTime() >= t && a.dueAt.getTime() - t <= 7 * DAY);
-    if (upcoming[0]) summary.push(`Your ${upcoming[0].course} ${upcoming[0].title.toLowerCase()} is due ${relDay(upcoming[0].dueAt, now)}.`);
+    if (upcoming[0]) summary.push(`“${upcoming[0].title}”${upcoming[0].course ? ` (${upcoming[0].course})` : ""} is due ${relDay(upcoming[0].dueAt, now)}.`);
     if (overdue.length) summary.push(`${plural(overdue.length, "assignment")} ${overdue.length === 1 ? "is" : "are"} overdue.`);
     sections.push({
       title: "Assignments",
       lines: [
-        ...overdue.map((a) => `Overdue: ${a.title} (${a.course})`),
-        ...upcoming.map((a) => `${a.title} (${a.course}) — due ${relDay(a.dueAt, now)}`),
+        ...overdue.map((a) => `Overdue: ${a.title}${a.course ? ` (${a.course})` : ""}`),
+        ...upcoming.map((a) => `${a.title}${a.course ? ` (${a.course})` : ""} — due ${relDay(a.dueAt, now)}`),
       ].concat(overdue.length + upcoming.length ? [] : ["Nothing due in the next 7 days."]),
     });
-    overdue.forEach((a) => priorities.push(`Finish the overdue ${a.course} work: ${a.title}`));
-    upcoming.filter((a) => a.dueAt.getTime() - t <= 2 * DAY).forEach((a) => priorities.push(`Work on ${a.title} (${a.course}), due ${relDay(a.dueAt, now)}`));
+    overdue.forEach((a) => priorities.push(`Finish the overdue work: ${a.title}${a.course ? ` (${a.course})` : ""}`));
+    upcoming.filter((a) => a.dueAt.getTime() - t <= 2 * DAY).forEach((a) => priorities.push(`Work on ${a.title}${a.course ? ` (${a.course})` : ""}, due ${relDay(a.dueAt, now)}`));
 
   }
 

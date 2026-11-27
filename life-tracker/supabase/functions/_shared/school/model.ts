@@ -30,11 +30,45 @@ export interface MappedItem {
   missing: boolean;
 }
 
+/** Something to do, with a due date (graded or not). */
+export interface MappedAssignment {
+  externalId: string;
+  courseExternalId: string;
+  title: string;
+  description: string;
+  dueAt: string | null; // ISO timestamp
+  dueHasTime: boolean;
+  url: string | null;
+  /** Turned in (or excused) according to the platform. */
+  submitted: boolean;
+}
+
 export interface MappedSchool {
   courses: MappedCourse[];
   categories: MappedCategory[];
   items: MappedItem[];
+  assignments: MappedAssignment[];
 }
+
+/** Plain text from an HTML description, trimmed to fit. */
+export function plainText(html: unknown, max = 2000): string {
+  return String(html ?? "")
+    .replace(/<(br|\/p|\/div|\/li)\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+}
+
+/** Only keep https links (the database rejects anything else). */
+export const safeUrl = (u: unknown) => (typeof u === "string" && /^https:\/\//.test(u) && u.length <= 500 ? u : null);
 
 /** Fetches a URL and returns parsed JSON (following pagination where the platform uses it). */
 export type FetchJson = (url: string) => Promise<unknown>;

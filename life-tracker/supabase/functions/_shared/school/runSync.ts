@@ -118,14 +118,14 @@ export async function runSchoolSync(integration: Integration, deps: SyncDeps): P
     const mapped = await fetchSchool(integration, secret, deps, now.toISOString().slice(0, 10));
 
     const existing = {} as Existing;
-    for (const t of ["courses", "grade_categories", "grade_items"] as const) {
+    for (const t of ["courses", "grade_categories", "grade_items", "assignments"] as const) {
       const r = await db.from(t).select("*").eq("user_id", integration.user_id).eq("source", integration.provider);
       if (r.error) throw new SyncError(`Database read failed (${t}).`, "error");
       existing[t] = r.data ?? [];
     }
     const plan = planSchoolSync(mapped, existing, { userId: integration.user_id, source: integration.provider, now: now.toISOString(), newId });
     let changed = 0;
-    for (const t of ["courses", "grade_categories", "grade_items"] as const) {
+    for (const t of ["courses", "grade_categories", "grade_items", "assignments"] as const) {
       for (let i = 0; i < plan[t].length; i += BATCH) {
         const r = await db.from(t).upsert(plan[t].slice(i, i + BATCH), { onConflict: "id" });
         if (r.error) throw new SyncError(`Database write failed (${t}).`, "error");

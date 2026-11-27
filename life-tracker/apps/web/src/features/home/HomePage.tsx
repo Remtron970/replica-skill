@@ -1,13 +1,11 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
-  AlarmClock,
   ArrowRight,
   BookOpenCheck,
   CalendarClock,
   FlaskConical,
   Info,
   Mail,
-  MapPin,
   Moon,
   Newspaper,
   SlidersHorizontal,
@@ -25,11 +23,9 @@ import {
   Badge,
   Button,
   Card,
-  Countdown,
   EmptyState,
   IconButton,
   IconChip,
-  ProgressBar,
   SectionCard,
   Sheet,
   type Tone,
@@ -38,10 +34,14 @@ import { useAuth } from "../../lib/auth";
 import { useInstall } from "../../lib/install";
 import { itemVariants, listVariants, spring } from "../../lib/motion";
 import { usePrefs } from "../../lib/prefs";
-import { durationMinutes, formatTime, scheduleStatus } from "../../lib/schedule";
+import { scheduleStatus } from "../../lib/schedule";
 import type { DashboardSectionId } from "../../lib/sync";
 import { formatClock, formatLongDate, greetingFor, useNow } from "../../lib/time";
 import { useAcademics } from "../academics/useAcademics";
+import { DayTimeline } from "../schedule/Timeline";
+import { useSchedule } from "../schedule/useSchedule";
+import { store } from "../../lib/store/schema";
+import { useCollection } from "../../lib/store/StoreProvider";
 import { CustomizeDashboard } from "./CustomizeDashboard";
 import {
   buildBriefing,
@@ -57,12 +57,25 @@ export function HomePage() {
   const { prefs, update } = usePrefs();
   const now = useNow(15_000); // data refresh; the clock and countdowns tick on their own
   const academics = useAcademics();
+  const schedule = useSchedule();
+  const assignments = useCollection(store.assignments);
   const data = useMemo(
     () =>
       prefs.demo
         ? demoData(now)
-        : liveData({ summaries: academics.summaries, items: academics.items, gpa: academics.gpa.unweighted, average: academics.average }, now),
-    [prefs.demo, now, academics],
+        : liveData(
+            {
+              summaries: academics.summaries,
+              items: academics.items,
+              gpa: academics.gpa.unweighted,
+              average: academics.average,
+              schedule: { forDay: schedule.forDay, labelFor: schedule.labelFor, isSetUp: schedule.isSetUp },
+              assignments,
+              courseNames: new Map(academics.allCourses.map((c) => [c.id, c.name])),
+            },
+            now,
+          ),
+    [prefs.demo, now, academics, schedule, assignments],
   );
   const [customizing, setCustomizing] = useState(false);
 
@@ -250,100 +263,41 @@ function ScheduleCard({ data, now }: { data: HomeData; now: Date }) {
   const navigate = useNavigate();
   const sec = SECTION_BY_ID.schedule;
   const demo = data.mode === "demo";
-  const st = scheduleStatus(data.schedule, now);
-  const t = now.getTime();
+  const source = data.scheduleFor ?? data.schedule;
+  const hasSchedule = !!data.scheduleFor || data.schedule.length > 0;
+  const st = scheduleStatus(source, now);
+  const label = data.dayLabel?.(now);
+  const count = st.today.filter((o) => o.block.title !== "Lunch").length;
 
   return (
     <SectionCard
       title="Today's schedule"
-      subtitle={st.today.length ? `${st.today.filter((o) => o.block.title !== "Lunch").length} classes` : undefined}
+      subtitle={hasSchedule ? [label, st.today.length ? `${count} class${count === 1 ? "" : "es"}` : "No classes today"].filter(Boolean).join(" · ") : undefined}
       icon={sec.icon}
       accent={sec.accent}
       demo={demo}
-      sync={demo ? { source: "Demo data", syncedAt: now } : { source: "Schedule", state: "not_connected" }}
+      sync={demo ? { source: "Demo data", syncedAt: now } : hasSchedule ? undefined : { source: "Schedule", state: "not_connected" }}
       action={
         <Button variant="ghost" size="sm" onClick={() => navigate("/schedule")}>
           Open
         </Button>
       }
     >
-      {!data.schedule.length ? (
+      {!hasSchedule ? (
         <EmptyState
           compact
           icon={sec.icon}
           accent={sec.accent}
-          title="No classes yet"
-          body="Your classes appear here once you add your schedule or connect your school."
-          badge={<Badge tone="brand">Phase {sec.phase}</Badge>}
+          title="No schedule yet"
+          body="Set up your block schedule once and your classes, the current class and a countdown appear here."
+          action={
+            <Button size="sm" onClick={() => navigate("/schedule")}>
+              Set up schedule
+            </Button>
+          }
         />
       ) : (
-        <>
-          {/* Now / next */}
-          {st.current ? (
-            <div className="mb-4 rounded-2xl bg-brand-soft/60 p-3.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[12px] font-semibold tracking-wider text-brand-ink uppercase">Happening now</p>
-                <p className="text-[13px] text-muted">
-                  ends {formatTime(st.current.end)} · <Countdown target={st.current.end} className="font-semibold text-ink" /> left
-                </p>
-              </div>
-              <p className="text-[17px] font-semibold">{st.current.block.title}</p>
-              <p className="mb-2.5 text-[13px] text-muted">{[st.current.block.room, st.current.block.teacher].filter(Boolean).join(" · ")}</p>
-              <ProgressBar value={st.current.progress} label={`${st.current.block.title} progress`} />
-            </div>
-          ) : null}
-          {st.next && (
-            <div className="mb-4 flex items-center gap-3 rounded-2xl bg-surface-2/70 p-3.5">
-              <AlarmClock size={20} className="shrink-0 text-accent-blue" aria-hidden />
-              <p className="min-w-0 flex-1 text-[14px]">
-                Next: <strong>{st.next.block.title}</strong>{" "}
-                {st.next.isToday ? `at ${formatTime(st.next.start)}` : `on ${st.next.start.toLocaleDateString(undefined, { weekday: "long" })} at ${formatTime(st.next.start)}`}
-              </p>
-              <p className="shrink-0 text-[13px] text-muted">
-                in <Countdown target={st.next.start} className="font-semibold text-ink" />
-              </p>
-            </div>
-          )}
-          {st.doneForToday && !st.next?.isToday && <p className="mb-3 text-[14px] text-muted">Classes are done for today. 🎉</p>}
-
-          {/* Timeline */}
-          {st.today.length ? (
-            <ol className="relative ml-1.5 border-l-2 border-line" aria-label="Today's classes">
-              {st.today.map((o) => {
-                const isNow = st.current?.block.id === o.block.id;
-                const past = o.end.getTime() <= t;
-                return (
-                  <li key={o.block.id} className="relative pb-3 pl-5 last:pb-0" aria-current={isNow ? "time" : undefined}>
-                    <span
-                      className={`absolute top-1.5 -left-[7px] h-3 w-3 rounded-full border-2 border-surface ${
-                        isNow ? "bg-brand ring-4 ring-brand/25" : past ? "bg-line" : "bg-accent-blue"
-                      }`}
-                      aria-hidden
-                    />
-                    <div className={`flex items-baseline justify-between gap-3 ${past && !isNow ? "opacity-60" : ""}`}>
-                      <div className="min-w-0">
-                        <p className={`truncate text-[15px] ${isNow ? "font-semibold" : "font-medium"}`}>
-                          {o.block.title}
-                          {isNow && <span className="sr-only"> (now)</span>}
-                        </p>
-                        {o.block.room && (
-                          <p className="flex items-center gap-1 text-[12.5px] text-muted">
-                            <MapPin size={12} aria-hidden /> {o.block.room}
-                          </p>
-                        )}
-                      </div>
-                      <p className="tabular shrink-0 text-[12.5px] text-muted">
-                        {formatTime(o.start)}–{formatTime(o.end)} · {durationMinutes(o)} min
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : (
-            <p className="text-[14px] text-muted">No classes today.</p>
-          )}
-        </>
+        <DayTimeline status={st} now={now} labelFor={data.dayLabel} />
       )}
     </SectionCard>
   );

@@ -1,4 +1,4 @@
-import { clip, dateOnly, type FetchJson, type MappedSchool } from "./model.ts";
+import { clip, dateOnly, plainText, safeUrl, type FetchJson, type MappedSchool } from "./model.ts";
 
 /**
  * Google Classroom API v1, read-only (OAuth scopes: classroom.courses.readonly,
@@ -34,8 +34,12 @@ interface GCourse {
 interface GCourseWork {
   id: string;
   title?: string;
+  description?: string;
+  alternateLink?: string;
   maxPoints?: number;
   dueDate?: GDate;
+  /** UTC, like dueDate */
+  dueTime?: { hours?: number; minutes?: number };
   state?: string;
   gradeCategory?: { id?: string };
 }
@@ -49,12 +53,21 @@ interface GSubmission {
 const gdate = (d?: GDate) => (d?.year && d.month && d.day ? `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}` : null);
 const NOT_TURNED_IN = new Set(["NEW", "CREATED", "RECLAIMED_BY_STUDENT"]);
 
+/** Classroom due dates/times are in UTC. Date-only due dates keep the calendar date. */
+export function classroomDue(d?: GDate, t?: { hours?: number; minutes?: number }): { dueAt: string | null; dueHasTime: boolean } {
+  if (!d?.year || !d.month || !d.day) return { dueAt: null, dueHasTime: false };
+  if (t && (t.hours !== undefined || t.minutes !== undefined))
+    return { dueAt: new Date(Date.UTC(d.year, d.month - 1, d.day, t.hours ?? 0, t.minutes ?? 0)).toISOString(), dueHasTime: true };
+  // No time: store noon UTC so the calendar date is the same in every US/European time zone.
+  return { dueAt: new Date(Date.UTC(d.year, d.month - 1, d.day, 12)).toISOString(), dueHasTime: false };
+}
+
 export function mapClassroom(
   courses: GCourse[],
   data: Record<string, { teachers: { profile?: { name?: { fullName?: string } } }[]; work: GCourseWork[]; subs: GSubmission[] }>,
   today: string,
 ): MappedSchool {
-  const out: MappedSchool = { courses: [], categories: [], items: [] };
+  const out: MappedSchool = { courses: [], categories: [], items: [], assignments: [] };
   for (const c of courses) {
     const d = data[c.id] ?? { teachers: [], work: [], subs: [] };
     const cid = `classroom:course:${c.id}`;
@@ -79,8 +92,17 @@ export function mapClassroom(
     const subs = new Map(d.subs.map((s) => [s.courseWorkId, s]));
     for (const w of d.work) {
       if (w.state && w.state !== "PUBLISHED") continue;
-      if (!(typeof w.maxPoints === "number" && w.maxPoints > 0)) continue; // ungraded work
       const s = subs.get(w.id);
+      out.assignments.push({
+        externalId: `classroom:work:${c.id}:${w.id}`,
+        courseExternalId: cid,
+        title: clip(w.title || "Assignment", 160),
+        description: plainText(w.description),
+        ...classroomDue(w.dueDate, w.dueTime),
+        url: safeUrl(w.alternateLink),
+        submitted: !!s && !NOT_TURNED_IN.has(s.state ?? "NEW"),
+      });
+      if (!(typeof w.maxPoints === "number" && w.maxPoints > 0)) continue; // ungraded: a task, not a grade
       const graded = typeof s?.assignedGrade === "number";
       const due = gdate(w.dueDate);
       out.items.push({

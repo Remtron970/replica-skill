@@ -115,11 +115,69 @@ describe("Google Classroom", () => {
   });
 });
 
+describe("assignments from school platforms", () => {
+  it("Canvas: every published assignment is a task, with link, plain-text description and turned-in status", () => {
+    const groups = structuredClone(canvasGroups) as unknown as Record<string, { assignments: Record<string, unknown>[] }[]>;
+    Object.assign(groups["101"][0].assignments[0], { html_url: "https://school.instructure.com/courses/101/assignments/1001", description: "<p>Read <b>ch. 3</b> &amp; answer</p><p>Q1–5</p>" });
+    groups["101"][0].assignments[1].html_url = "javascript:alert(1)";
+    const m = mapCanvas(canvasCourses as never, groups as never);
+    expect(m.assignments.map((a) => [a.title, a.submitted])).toEqual([
+      ["Unit 1 test", true], ["Unit 2 test", false], ["HW 1", true], ["HW 2", false], ["HW 3", true], ["Practice", false],
+    ]);
+    expect(m.assignments[0]).toMatchObject({ dueAt: "2026-09-20T05:59:59Z", dueHasTime: true, url: "https://school.instructure.com/courses/101/assignments/1001", description: "Read ch. 3 & answer\nQ1–5" });
+    expect(m.assignments[1].url).toBeNull(); // unsafe link dropped
+    expect(m.items.map((i) => i.title)).not.toContain("Practice"); // still not counted as a grade
+  });
+
+  it("Classroom: due times are UTC; date-only due dates keep their calendar date; ungraded work is still a task", () => {
+    const m = mapClassroom(
+      [{ id: "c1", name: "Health" }] as never,
+      {
+        c1: {
+          teachers: [],
+          work: [
+            { id: "w1", title: "Essay", maxPoints: 10, dueDate: { year: 2026, month: 12, day: 2 }, dueTime: { hours: 4, minutes: 59 }, state: "PUBLISHED", alternateLink: "https://classroom.google.com/c/x/a/w1" },
+            { id: "w2", title: "Read chapter", dueDate: { year: 2026, month: 12, day: 3 }, state: "PUBLISHED" },
+            { id: "w3", title: "No date", state: "PUBLISHED" },
+          ],
+          subs: [{ courseWorkId: "w1", state: "TURNED_IN" }],
+        },
+      } as never,
+      "2026-11-27",
+    );
+    expect(m.assignments.map((a) => [a.title, a.dueAt, a.dueHasTime, a.submitted])).toEqual([
+      ["Essay", "2026-12-02T04:59:00.000Z", true, true],
+      ["Read chapter", "2026-12-03T12:00:00.000Z", false, false],
+      ["No date", null, false, false],
+    ]);
+    expect(m.items.map((i) => i.title)).toEqual(["Essay"]);
+  });
+
+  it("a sync keeps your priority, progress and reminder on a synced assignment", () => {
+    let k = 0;
+    const o = { userId: "u1", source: "canvas" as const, now: "2026-11-27T12:00:00.000Z", newId: () => `n-${++k}` };
+    const first = planSchoolSync(mapCanvas(canvasCourses as never, canvasGroups as never), { courses: [], grade_categories: [], grade_items: [], assignments: [] }, o);
+    expect(first.assignments[0]).toMatchObject({ priority: "normal", status: "todo", reminder_minutes: null });
+    const existing: Existing = {
+      courses: first.courses as never,
+      grade_categories: first.grade_categories as never,
+      grade_items: first.grade_items as never,
+      assignments: first.assignments.map((r) => ({ ...r, priority: "high", status: "done", reminder_minutes: 60 })) as never,
+    };
+    const groups = structuredClone(canvasGroups) as unknown as Record<string, { assignments: Record<string, unknown>[] }[]>;
+    groups["101"][0].assignments[1].due_at = "2026-12-04T05:59:59Z"; // teacher extended the deadline
+    const p = planSchoolSync(mapCanvas(canvasCourses as never, groups as never), existing, o);
+    expect(p.assignments).toHaveLength(1);
+    expect(p.assignments[0]).toMatchObject({ title: "Unit 2 test", due_at: "2026-12-04T05:59:59Z" });
+    for (const k2 of ["priority", "status", "reminder_minutes", "completed_at"]) expect(p.assignments[0]).not.toHaveProperty(k2);
+  });
+});
+
 describe("planSchoolSync", () => {
   const mapped = mapCanvas(canvasCourses as never, canvasGroups as never);
   let n = 0;
   const opts = { userId: "u1", source: "canvas" as const, now: "2026-11-27T12:00:00.000Z", newId: () => `id-${++n}` };
-  const empty: Existing = { courses: [], grade_categories: [], grade_items: [] };
+  const empty: Existing = { courses: [], grade_categories: [], grade_items: [], assignments: [] };
 
   it("first sync creates everything with sensible defaults", () => {
     const p = planSchoolSync(mapped, empty, opts);
@@ -137,9 +195,10 @@ describe("planSchoolSync", () => {
       courses: first.courses.map((r) => ({ ...r, color: "green", level: "ap", credits: "1.00" })) as never,
       grade_categories: first.grade_categories.map((r) => ({ ...r, weight: String(r.weight) })) as never,
       grade_items: first.grade_items as never,
+      assignments: first.assignments.map((r) => ({ ...r, due_at: typeof r.due_at === "string" ? (r.due_at as string).replace("Z", "+00:00") : r.due_at })) as never,
     };
     const again = planSchoolSync(mapped, existing, opts);
-    expect([again.courses.length, again.grade_categories.length, again.grade_items.length]).toEqual([0, 0, 0]);
+    expect([again.courses.length, again.grade_categories.length, again.grade_items.length, again.assignments.length]).toEqual([0, 0, 0, 0]);
 
     type Groups = Record<string, { assignments: { id: number; submission?: unknown }[] }[]>;
     const groups = structuredClone(canvasGroups) as unknown as Groups;
@@ -157,7 +216,7 @@ describe("planSchoolSync", () => {
   });
 
   it("never touches grades you entered yourself", () => {
-    const existing: Existing = { courses: [{ id: "mine", source: "manual", external_id: null, name: "Biology" }] as never, grade_categories: [], grade_items: [] };
+    const existing: Existing = { courses: [{ id: "mine", source: "manual", external_id: null, name: "Biology" }] as never, grade_categories: [], grade_items: [], assignments: [] };
     const p = planSchoolSync(mapped, existing, opts);
     expect(p.deleted.courses).toEqual([]);
     expect(p.courses.some((r) => r.id === "mine")).toBe(false);
@@ -191,7 +250,7 @@ describe("OAuth state", () => {
 
 // ---- Full run with a fake database and a fake Canvas server ----
 function fakeDb() {
-  const tables: Record<string, Record<string, unknown>[]> = { sync_runs: [], integration_tokens: [], integrations: [{ id: "int1", status: "connected" }], courses: [], grade_categories: [], grade_items: [] };
+  const tables: Record<string, Record<string, unknown>[]> = { sync_runs: [], integration_tokens: [], integrations: [{ id: "int1", status: "connected" }], courses: [], grade_categories: [], grade_items: [], assignments: [] };
   const from = (t: string) => {
     let rows = () => tables[t];
     const filters: ((r: Record<string, unknown>) => boolean)[] = [];
@@ -247,11 +306,12 @@ describe("runSchoolSync (end to end with fakes)", () => {
       return new Response(JSON.stringify(canvasGroups[id as "101"]));
     }) as typeof fetch;
     const changed = await runSchoolSync(integration, { db, key, fetch: fakeFetch, now: () => new Date("2026-11-27T12:00:00Z") });
-    expect(changed).toBe(2 + 2 + 5);
+    expect(changed).toBe(2 + 2 + 5 + 6); // classes, categories, grades, assignments
     expect(tables.courses.map((c) => c.name)).toEqual(["AP Biology", "Art"]);
     expect(tables.grade_items).toHaveLength(5);
     expect(tables.integrations[0]).toMatchObject({ status: "connected", last_error: null });
-    expect(tables.sync_runs[0]).toMatchObject({ status: "ok", items_upserted: 9 });
+    expect(tables.sync_runs[0]).toMatchObject({ status: "ok", items_upserted: 15 });
+    expect(tables.assignments).toHaveLength(6);
     expect(seen.filter((u) => u.includes("assignment_groups"))).toHaveLength(2);
   });
 

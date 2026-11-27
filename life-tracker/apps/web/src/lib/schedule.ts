@@ -46,8 +46,12 @@ export function occurrencesOn(blocks: ClassBlock[], date: Date): Occurrence[] {
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
-export function scheduleStatus(blocks: ClassBlock[], now: Date): ScheduleStatus {
-  const today = occurrencesOn(blocks, now);
+/** Classes for any date (a weekly list, or a block schedule with rotating day types). */
+export type DayProvider = (date: Date) => Occurrence[];
+
+export function scheduleStatus(source: ClassBlock[] | DayProvider, now: Date, lookaheadDays = 14): ScheduleStatus {
+  const forDay: DayProvider = Array.isArray(source) ? (d) => occurrencesOn(source, d) : source;
+  const today = forDay(now);
   const t = now.getTime();
   const cur = today.find((o) => o.start.getTime() <= t && t < o.end.getTime());
   const current = cur ? { ...cur, progress: (t - cur.start.getTime()) / (cur.end.getTime() - cur.start.getTime()) } : undefined;
@@ -56,10 +60,9 @@ export function scheduleStatus(blocks: ClassBlock[], now: Date): ScheduleStatus 
   const laterToday = today.find((o) => o.start.getTime() > t);
   if (laterToday) next = { ...laterToday, isToday: true };
   else {
-    for (let i = 1; i <= 7 && !next; i++) {
-      const day = new Date(now);
-      day.setDate(day.getDate() + i);
-      const first = occurrencesOn(blocks, day)[0];
+    for (let i = 1; i <= lookaheadDays && !next; i++) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      const first = forDay(day)[0];
       if (first) next = { ...first, isToday: false };
     }
   }

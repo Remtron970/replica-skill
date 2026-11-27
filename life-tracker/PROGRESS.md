@@ -174,3 +174,40 @@ You use **Canvas, Google Classroom and StudentVUE**.
   "Using Canvas, Classroom and StudentVUE together" in docs/SETUP_SCHOOL.md.
 - Verified: 167 unit tests, 113 end-to-end checks.
 - Idea for later: link the same class across platforms automatically instead of using credits 0.
+
+## Phase 5 — Schedule & assignments (2026-11-27)
+Your school: **modified block** schedule; Canvas, Google Classroom, StudentVUE.
+
+**Completed**
+- Block-schedule engine (`src/features/schedule/blockSchedule.ts`): day types
+  (e.g. All classes / A day / B day), fixed weekdays (Monday = all classes),
+  continuous A/B rotation lined up to a real date, days off that don't use up a
+  rotation day, per-date "runs as" swaps, optional term dates.
+- Schedule screens: one-tap setup (Modified block / A/B / same every day), class
+  times per day type with overlap warnings, "Which day is which" with a live
+  "today is an A day" check; Today (current class, progress, countdown, next
+  class incl. across holidays), Week, Month (tap a date: no school / runs as…).
+- Assignments: Overdue / Due today / Due tomorrow / This week / Later / No due
+  date / Done, filter by class, check off with undo, priority, reminders (shown
+  while the app is open; phone notifications come in Phase 11), notes.
+- Canvas and Google Classroom now also sync assignments (due dates incl.
+  Classroom's UTC times, links, descriptions as plain text, turned-in status);
+  your priority, progress and reminders are kept across syncs.
+- Home: today's schedule with the day type ("A day · 4 classes"), countdown,
+  assignments in stats/Important/briefing ("It's an A day: …").
+- Database: `day_types`, `schedule_blocks`, `schedule_exceptions`, `assignments`,
+  `profiles.schedule_settings` with RLS and validation (times, https links).
+
+**Verified**
+- Unit: 196 tests (rotation incl. holidays, weekends, backwards dates, swapped
+  days, anchors on non-rotating days; buckets/due text/reminders; assignment
+  mapping and sync planning).
+- Database: 24 checks. End-to-end: 136 checks incl. a full modified-block setup,
+  Thanksgiving off, current/next class, assignments, Home, and a reminder firing
+  when the clock reaches it.
+
+**Notes**
+- Fixed: an anchor date on a Monday/weekend would have shifted the rotation by a day.
+- Reminders only appear while Life Tracker is open until Phase 11 (push).
+
+**Next step:** Phase 6 — Email (Gmail).

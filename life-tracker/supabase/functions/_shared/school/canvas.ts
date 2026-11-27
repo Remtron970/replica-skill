@@ -1,4 +1,4 @@
-import { clip, dateOnly, type FetchJson, type MappedSchool } from "./model.ts";
+import { clip, dateOnly, plainText, safeUrl, type FetchJson, type MappedSchool } from "./model.ts";
 
 /**
  * Canvas LMS (REST API v1), read-only, with a personal access token.
@@ -17,6 +17,7 @@ interface CanvasCourse {
 }
 
 interface CanvasSubmission {
+  submitted_at?: string | null;
   score?: number | null;
   excused?: boolean | null;
   missing?: boolean | null;
@@ -31,6 +32,8 @@ interface CanvasAssignment {
   due_at?: string | null;
   published?: boolean;
   omit_from_final_grade?: boolean;
+  html_url?: string;
+  description?: string | null;
   submission?: CanvasSubmission | null;
 }
 
@@ -62,7 +65,7 @@ export function normalizeCanvasUrl(input: string): string {
 }
 
 export function mapCanvas(courses: CanvasCourse[], groupsByCourse: Record<string, CanvasGroup[]>): MappedSchool {
-  const out: MappedSchool = { courses: [], categories: [], items: [] };
+  const out: MappedSchool = { courses: [], categories: [], items: [], assignments: [] };
   for (const c of courses) {
     if (c.access_restricted_by_date) continue;
     const cid = `canvas:course:${c.id}`;
@@ -84,8 +87,19 @@ export function mapCanvas(courses: CanvasCourse[], groupsByCourse: Record<string
         sort: i,
       });
       for (const a of g.assignments ?? []) {
-        if (a.published === false || a.omit_from_final_grade) continue;
+        if (a.published === false) continue;
         const s = a.submission ?? {};
+        out.assignments.push({
+          externalId: `canvas:assignment:${a.id}`,
+          courseExternalId: cid,
+          title: clip(a.name || "Assignment", 160),
+          description: plainText(a.description),
+          dueAt: a.due_at ?? null,
+          dueHasTime: true,
+          url: safeUrl(a.html_url),
+          submitted: s.excused === true || !!s.submitted_at || ["submitted", "graded", "pending_review"].includes(s.workflow_state ?? ""),
+        });
+        if (a.omit_from_final_grade) continue; // still a task, but doesn't count toward the grade
         const graded = typeof s.score === "number" && s.workflow_state !== "pending_review";
         out.items.push({
           externalId: `canvas:assignment:${a.id}`,
