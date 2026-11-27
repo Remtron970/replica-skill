@@ -8,12 +8,38 @@ export interface DashboardItem {
   visible: boolean;
 }
 
+/** GPA settings. Schools differ, so all of it is editable (Academics → GPA settings). */
+export interface AcademicSettings {
+  /** Default grading scale for classes without their own (a preset or a custom scale id). */
+  scaleId: string;
+  /** Extra grade points added for weighted GPA, by course level. */
+  bonus: { regular: number; honors: number; ap: number; ib: number; dual: number; other: number };
+}
+
+export const STANDARD_SCALE_ID = "00000000-0000-4000-8000-000000000001";
+export const DEFAULT_ACADEMIC: AcademicSettings = {
+  scaleId: STANDARD_SCALE_ID,
+  bonus: { regular: 0, honors: 0.5, ap: 1, ib: 1, dual: 1, other: 0 },
+};
+
+export function normalizeAcademic(raw: unknown): AcademicSettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<AcademicSettings>;
+  const b = (r.bonus && typeof r.bonus === "object" ? r.bonus : {}) as Partial<AcademicSettings["bonus"]>;
+  const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 2 ? v : d);
+  const d = DEFAULT_ACADEMIC.bonus;
+  return {
+    scaleId: typeof r.scaleId === "string" && /^[0-9a-f-]{36}$/i.test(r.scaleId) ? r.scaleId : DEFAULT_ACADEMIC.scaleId,
+    bonus: { regular: num(b.regular, d.regular), honors: num(b.honors, d.honors), ap: num(b.ap, d.ap), ib: num(b.ib, d.ib), dual: num(b.dual, d.dual), other: num(b.other, d.other) },
+  };
+}
+
 export interface Prefs {
   name: string;
   theme: ThemePref;
   pins: SectionId[];
   dashboard: DashboardItem[];
   demo: boolean;
+  academic: AcademicSettings;
   /** ms since epoch of the last change on any device; 0 = never changed. */
   updatedAt: number;
 }
@@ -26,7 +52,7 @@ export const DASHBOARD_SECTIONS: { id: DashboardSectionId; label: string }[] = [
   { id: "important", label: "Important" },
 ];
 export const DEFAULT_DASHBOARD: DashboardItem[] = DASHBOARD_SECTIONS.map((s) => ({ id: s.id, visible: true }));
-export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, updatedAt: 0 };
+export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, updatedAt: 0 };
 
 /** Keep known sections in the saved order, drop junk/duplicates, append any new sections. */
 export function normalizeDashboard(raw: unknown): DashboardItem[] {
@@ -59,6 +85,7 @@ export function parsePrefs(json: string | null): Prefs {
       pins: normalizePins(raw.pins),
       dashboard: normalizeDashboard(raw.dashboard),
       demo: raw.demo === true,
+      academic: normalizeAcademic(raw.academic),
       updatedAt: typeof raw.updatedAt === "number" && raw.updatedAt > 0 ? raw.updatedAt : 0,
     };
   } catch {
@@ -75,6 +102,7 @@ export interface ProfileRow {
   nav_pins: string[];
   dashboard_layout: unknown;
   demo_mode: boolean;
+  academic_settings?: unknown;
   prefs_updated_at: string;
 }
 
@@ -86,6 +114,7 @@ export function rowToPrefs(row: ProfileRow): Prefs {
     pins: normalizePins(row.nav_pins),
     dashboard: normalizeDashboard(row.dashboard_layout),
     demo: row.demo_mode === true,
+    academic: normalizeAcademic(row.academic_settings),
     updatedAt: Number.isFinite(t) && t > 0 ? t : 0,
   };
 }
@@ -98,6 +127,7 @@ export function prefsToRow(p: Prefs, timezone: string): Omit<ProfileRow, "id"> {
     nav_pins: p.pins,
     dashboard_layout: p.dashboard,
     demo_mode: p.demo,
+    academic_settings: p.academic,
     prefs_updated_at: new Date(p.updatedAt || 0).toISOString(),
   };
 }

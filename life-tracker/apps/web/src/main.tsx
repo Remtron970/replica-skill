@@ -8,13 +8,19 @@ import { SkeletonCard, ToastProvider } from "./components/ui";
 import { HomePage } from "./features/home/HomePage";
 import { SectionPage } from "./features/section/SectionPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
-import { AccountPage } from "./features/account/AccountPage";
 import { AuthProvider } from "./lib/auth";
 import { PrefsProvider } from "./lib/prefs";
+import { StoreProvider } from "./lib/store/StoreProvider";
 import "./styles.css";
 
 // Heavier screens (charts) load on first visit so the app opens fast.
 const DesignPage = lazy(() => import("./features/design/DesignPage").then((m) => ({ default: m.DesignPage })));
+const AccountPage = lazy(() => import("./features/account/AccountPage").then((m) => ({ default: m.AccountPage })));
+const AcademicsPage = lazy(() => import("./features/academics/AcademicsPage").then((m) => ({ default: m.AcademicsPage })));
+const CoursePage = lazy(() => import("./features/academics/CoursePage").then((m) => ({ default: m.CoursePage })));
+const ImportPage = lazy(() => import("./features/academics/ImportPage").then((m) => ({ default: m.ImportPage })));
+
+const page = (el: React.ReactNode) => <Suspense fallback={<PageLoading />}>{el}</Suspense>;
 
 function PageLoading() {
   return (
@@ -43,7 +49,10 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "account", element: <AccountPage /> },
+      { path: "account", element: page(<AccountPage />) },
+      { path: "academics", element: page(<AcademicsPage />) },
+      { path: "academics/import", element: page(<ImportPage />) },
+      { path: "academics/:courseId", element: page(<CoursePage />) },
       {
         path: "design",
         element: (
@@ -52,7 +61,7 @@ const routes: RouteObject[] = [
           </Suspense>
         ),
       },
-      ...SECTIONS.filter((s) => s.id !== "home" && s.id !== "settings").map((s) => ({
+      ...SECTIONS.filter((s) => !["home", "settings", "academics"].includes(s.id)).map((s) => ({
         path: s.path.slice(1),
         element: <SectionPage section={s} />,
       })),
@@ -77,9 +86,11 @@ createRoot(document.getElementById("root")!).render(
     <MotionConfig reducedMotion="user">
       <AuthProvider>
         <PrefsProvider>
-          <ToastProvider>
-            <RouterProvider router={router} />
-          </ToastProvider>
+          <StoreProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+            </ToastProvider>
+          </StoreProvider>
         </PrefsProvider>
       </AuthProvider>
     </MotionConfig>

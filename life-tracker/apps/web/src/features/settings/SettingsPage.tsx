@@ -6,10 +6,10 @@ import { InstallCard } from "../../components/InstallCard";
 import { Badge, Button, Chip, IconChip, ListRow, PageHeader, SectionCard, SegmentedControl, Sheet, Switch, TextField, useToast } from "../../components/ui";
 import { useAuth } from "../../lib/auth";
 import { CustomizeDashboard } from "../home/CustomizeDashboard";
+import { SchoolConnections } from "./SchoolConnections";
 import { MAX_PINS, usePrefs, type ThemePref } from "../../lib/prefs";
 
 const COMING = [
-  ["School integrations", 4],
   ["Email integrations", 6],
   ["Health permissions", 7],
   ["Location for local news", 8],
@@ -58,6 +58,8 @@ export function SettingsPage() {
             onClick={() => navigate("/account")}
           />
         </SectionCard>
+
+        <SchoolConnections />
 
         <SectionCard title="Profile" subtitle="Used for your greeting. Saved on this device until sign-in arrives (Phase 3).">
           <form

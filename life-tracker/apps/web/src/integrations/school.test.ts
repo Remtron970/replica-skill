@@ -1,0 +1,268 @@
+// @vitest-environment node
+import { describe, expect, it } from "vitest";
+import { decrypt, encrypt, importKey } from "../../../../supabase/functions/_shared/crypto.ts";
+import { planSchoolSync, type Existing } from "../../../../supabase/functions/_shared/school/apply.ts";
+import { mapCanvas, normalizeCanvasUrl } from "../../../../supabase/functions/_shared/school/canvas.ts";
+import { mapClassroom } from "../../../../supabase/functions/_shared/school/classroom.ts";
+import { nextLink, runSchoolSync, saveSecret, SyncError, type Integration } from "../../../../supabase/functions/_shared/school/runSync.ts";
+import { signState, verifyState } from "../../../../supabase/functions/_shared/state.ts";
+import { coursePercent } from "../features/academics/grades";
+
+const KEY_B64 = btoa(String.fromCharCode(...new Uint8Array(32).map((_, i) => i + 1)));
+
+// ---- Fixtures in the shape the platforms document ----
+const canvasCourses = [
+  { id: 101, name: "AP Biology", apply_assignment_group_weights: true, teachers: [{ display_name: "Ms. Rivera" }] },
+  { id: 102, name: "Art", apply_assignment_group_weights: false, teachers: [] },
+  { id: 103, name: "Old course", access_restricted_by_date: true },
+];
+const canvasGroups = {
+  "101": [
+    {
+      id: 11, name: "Tests", group_weight: 60, position: 1,
+      assignments: [
+        { id: 1001, name: "Unit 1 test", points_possible: 100, due_at: "2026-09-20T05:59:59Z", submission: { score: 84, graded_at: "2026-09-22T15:00:00Z", workflow_state: "graded" } },
+        { id: 1002, name: "Unit 2 test", points_possible: 100, due_at: "2026-11-30T05:59:59Z", submission: { score: null, workflow_state: "unsubmitted" } },
+        { id: 1003, name: "Draft", points_possible: 50, published: false },
+      ],
+    },
+    {
+      id: 12, name: "Homework", group_weight: 40, position: 2,
+      assignments: [
+        { id: 1004, name: "HW 1", points_possible: 10, submission: { score: 10, graded_at: "2026-09-10T12:00:00Z", workflow_state: "graded" } },
+        { id: 1005, name: "HW 2", points_possible: 10, submission: { score: null, missing: true, workflow_state: "unsubmitted" } },
+        { id: 1006, name: "HW 3", points_possible: 10, submission: { score: null, excused: true } },
+        { id: 1007, name: "Practice", points_possible: 10, omit_from_final_grade: true, submission: { score: 2 } },
+      ],
+    },
+  ],
+  "102": [],
+};
+
+describe("Canvas", () => {
+  it("accepts school addresses and rejects unsafe ones", () => {
+    expect(normalizeCanvasUrl("school.instructure.com")).toBe("https://school.instructure.com");
+    expect(normalizeCanvasUrl("https://canvas.district.org/courses/5/")).toBe("https://canvas.district.org");
+    expect(() => normalizeCanvasUrl("http://school.instructure.com")).toThrow(/https/);
+    expect(() => normalizeCanvasUrl("localhost")).toThrow();
+    expect(() => normalizeCanvasUrl("192.168.0.5")).toThrow();
+  });
+
+  it("maps courses, weighted groups and submissions", () => {
+    const m = mapCanvas(canvasCourses as never, canvasGroups as never);
+    expect(m.courses).toEqual([
+      { externalId: "canvas:course:101", name: "AP Biology", teacher: "Ms. Rivera", room: "", gradingMode: "weighted" },
+      { externalId: "canvas:course:102", name: "Art", teacher: "", room: "", gradingMode: "points" },
+    ]);
+    expect(m.categories.map((c) => [c.name, c.weight, c.sort])).toEqual([["Tests", 60, 0], ["Homework", 40, 1]]);
+    const byTitle = Object.fromEntries(m.items.map((i) => [i.title, i]));
+    expect(Object.keys(byTitle)).toEqual(["Unit 1 test", "Unit 2 test", "HW 1", "HW 2", "HW 3"]); // unpublished + omitted skipped
+    expect(byTitle["Unit 1 test"]).toMatchObject({ earned: 84, possible: 100, gradedOn: "2026-09-22", dueOn: "2026-09-20", missing: false });
+    expect(byTitle["Unit 2 test"]).toMatchObject({ earned: null, missing: false });
+    expect(byTitle["HW 2"]).toMatchObject({ earned: null, missing: true });
+    expect(byTitle["HW 3"]).toMatchObject({ excused: true });
+  });
+
+  it("follows Link-header pagination", () => {
+    expect(nextLink('<https://x/api/v1/courses?page=2>; rel="next", <https://x/api/v1/courses?page=5>; rel="last"')).toBe("https://x/api/v1/courses?page=2");
+    expect(nextLink('<https://x/api/v1/courses?page=5>; rel="last"')).toBeNull();
+    expect(nextLink(null)).toBeNull();
+  });
+});
+
+describe("Google Classroom", () => {
+  const courses = [
+    { id: "c1", name: "Chemistry", section: "Period 3", room: "Lab 2", gradebookSettings: { calculationType: "WEIGHTED_CATEGORIES", gradeCategories: [{ id: "g1", name: "Labs", weight: 250000 }, { id: "g2", name: "Tests", weight: 750000 }] } },
+    { id: "c2", name: "Health", gradebookSettings: { calculationType: "TOTAL_POINTS" } },
+  ];
+  const data = {
+    c1: {
+      teachers: [{ profile: { name: { fullName: "Dr. Novak" } } }],
+      work: [
+        { id: "w1", title: "Lab 1", maxPoints: 20, dueDate: { year: 2026, month: 9, day: 10 }, state: "PUBLISHED", gradeCategory: { id: "g1" } },
+        { id: "w2", title: "Lab 2", maxPoints: 20, dueDate: { year: 2026, month: 9, day: 17 }, state: "PUBLISHED", gradeCategory: { id: "g1" } },
+        { id: "w3", title: "Test 1", maxPoints: 100, dueDate: { year: 2026, month: 12, day: 15 }, state: "PUBLISHED", gradeCategory: { id: "g2" } },
+        { id: "w4", title: "Reading (ungraded)", state: "PUBLISHED" },
+        { id: "w5", title: "Draft", maxPoints: 10, state: "DRAFT" },
+      ],
+      subs: [
+        { courseWorkId: "w1", state: "RETURNED", assignedGrade: 18, updateTime: "2026-09-12T10:00:00Z" },
+        { courseWorkId: "w2", state: "CREATED" },
+        { courseWorkId: "w3", state: "TURNED_IN" },
+      ],
+    },
+  };
+
+  it("maps weights (stored ×10,000), grades and infers missing work like Classroom does", () => {
+    const m = mapClassroom(courses as never, data as never, "2026-11-27");
+    expect(m.courses[0]).toEqual({ externalId: "classroom:course:c1", name: "Chemistry — Period 3", teacher: "Dr. Novak", room: "Lab 2", gradingMode: "weighted" });
+    expect(m.courses[1].gradingMode).toBe("points");
+    expect(m.categories.map((c) => [c.name, c.weight])).toEqual([["Labs", 25], ["Tests", 75]]);
+    expect(m.items.map((i) => [i.title, i.earned, i.missing])).toEqual([
+      ["Lab 1", 18, false],
+      ["Lab 2", null, true], // past due, not turned in
+      ["Test 1", null, false], // turned in, not graded yet
+    ]);
+  });
+
+  it("produces data the grade math understands", () => {
+    const m = mapClassroom(courses as never, data as never, "2026-11-27");
+    const base = { clientUpdatedAt: 1, deleted: false, source: "google_classroom" as const };
+    const cats = m.categories.map((c, i) => ({ ...base, id: c.externalId, courseId: c.courseExternalId, name: c.name, weight: c.weight, sort: i }));
+    const items = m.items.map((it) => ({ ...base, id: it.externalId, courseId: it.courseExternalId, categoryId: it.categoryExternalId, title: it.title, earned: it.earned, possible: it.possible, gradedOn: it.gradedOn, dueOn: it.dueOn, excused: it.excused, missing: it.missing, notes: "" }));
+    // Labs: 18/40 (missing counts 0) = 45%; Tests: nothing graded → Labs only = 45%
+    expect(coursePercent({ id: "classroom:course:c1", gradingMode: "weighted", manualPercent: null }, cats, items).percent).toBeCloseTo(45, 10);
+  });
+});
+
+describe("planSchoolSync", () => {
+  const mapped = mapCanvas(canvasCourses as never, canvasGroups as never);
+  let n = 0;
+  const opts = { userId: "u1", source: "canvas" as const, now: "2026-11-27T12:00:00.000Z", newId: () => `id-${++n}` };
+  const empty: Existing = { courses: [], grade_categories: [], grade_items: [] };
+
+  it("first sync creates everything with sensible defaults", () => {
+    const p = planSchoolSync(mapped, empty, opts);
+    expect(p.courses).toHaveLength(2);
+    expect(p.courses[0]).toMatchObject({ user_id: "u1", source: "canvas", external_id: "canvas:course:101", name: "AP Biology", grading_mode: "weighted", color: "blue", credits: 1, level: "regular" });
+    expect(p.grade_categories).toHaveLength(2);
+    expect(p.grade_items).toHaveLength(5);
+    expect(p.grade_items[0].course_id).toBe(p.courses[0].id);
+    expect(p.grade_items[0].category_id).toBe(p.grade_categories[0].id);
+  });
+
+  it("a repeat sync with nothing new writes nothing; changes write only what changed; your class settings are kept", () => {
+    const first = planSchoolSync(mapped, empty, opts);
+    const existing: Existing = {
+      courses: first.courses.map((r) => ({ ...r, color: "green", level: "ap", credits: "1.00" })) as never,
+      grade_categories: first.grade_categories.map((r) => ({ ...r, weight: String(r.weight) })) as never,
+      grade_items: first.grade_items as never,
+    };
+    const again = planSchoolSync(mapped, existing, opts);
+    expect([again.courses.length, again.grade_categories.length, again.grade_items.length]).toEqual([0, 0, 0]);
+
+    type Groups = Record<string, { assignments: { id: number; submission?: unknown }[] }[]>;
+    const groups = structuredClone(canvasGroups) as unknown as Groups;
+    groups["101"][0].assignments[1].submission = { score: 91, graded_at: "2026-11-27T09:00:00Z", workflow_state: "graded" };
+    groups["101"][1].assignments = groups["101"][1].assignments.filter((a) => a.id !== 1006); // HW 3 removed by teacher
+    const changed = planSchoolSync(mapCanvas(canvasCourses as never, groups as never), existing, opts);
+    expect(changed.grade_items.map((r) => [r.title, r.earned])).toEqual([["Unit 2 test", 91]]);
+    expect(changed.grade_items[0].id).toBe(existing.grade_items.find((r) => r.title === "Unit 2 test")!.id);
+    expect(changed.deleted.grade_items).toEqual([existing.grade_items.find((r) => r.title === "HW 3")!.id]);
+
+    const renamed = planSchoolSync(mapCanvas([{ ...canvasCourses[0], name: "AP Bio" }, canvasCourses[1]] as never, canvasGroups as never), existing, opts);
+    expect(renamed.courses).toHaveLength(1);
+    expect(renamed.courses[0]).not.toHaveProperty("color"); // user's color/level/credits untouched
+    expect(renamed.courses[0]).not.toHaveProperty("level");
+  });
+
+  it("never touches grades you entered yourself", () => {
+    const existing: Existing = { courses: [{ id: "mine", source: "manual", external_id: null, name: "Biology" }] as never, grade_categories: [], grade_items: [] };
+    const p = planSchoolSync(mapped, existing, opts);
+    expect(p.deleted.courses).toEqual([]);
+    expect(p.courses.some((r) => r.id === "mine")).toBe(false);
+  });
+});
+
+describe("token encryption", () => {
+  it("round-trips, uses a fresh IV each time, and detects tampering", async () => {
+    const key = await importKey(KEY_B64);
+    const a = await encrypt(key, "secret-token-123");
+    const b = await encrypt(key, "secret-token-123");
+    expect(a.ciphertext).not.toBe(b.ciphertext);
+    expect(await decrypt(key, a.ciphertext, a.iv)).toBe("secret-token-123");
+    const bad = a.ciphertext.slice(0, -4) + (a.ciphertext.endsWith("AAAA") ? "BBBB" : "AAAA");
+    await expect(decrypt(key, bad, a.iv)).rejects.toThrow();
+    await expect(importKey(btoa("short"))).rejects.toThrow(/32 bytes/);
+  });
+});
+
+describe("OAuth state", () => {
+  const user = "8b0f7a52-0000-4000-8000-000000000001";
+  it("accepts a genuine state and rejects forged, tampered or expired ones", async () => {
+    const s = await signState("k", user, 600, 1_000_000);
+    expect(await verifyState("k", s, 1_000_000)).toBe(user);
+    expect(await verifyState("other-key", s, 1_000_000)).toBeNull();
+    expect(await verifyState("k", s.replace(user, "8b0f7a52-0000-4000-8000-000000000002"), 1_000_000)).toBeNull();
+    expect(await verifyState("k", s, 1_000_000 + 601_000)).toBeNull();
+    expect(await verifyState("k", "garbage", 1_000_000)).toBeNull();
+  });
+});
+
+// ---- Full run with a fake database and a fake Canvas server ----
+function fakeDb() {
+  const tables: Record<string, Record<string, unknown>[]> = { sync_runs: [], integration_tokens: [], integrations: [{ id: "int1", status: "connected" }], courses: [], grade_categories: [], grade_items: [] };
+  const from = (t: string) => {
+    let rows = () => tables[t];
+    const filters: ((r: Record<string, unknown>) => boolean)[] = [];
+    let pendingUpdate: Record<string, unknown> | null = null;
+    const apply = () => {
+      const hit = rows().filter((r) => filters.every((f) => f(r)));
+      if (pendingUpdate) hit.forEach((r) => Object.assign(r, pendingUpdate));
+      return hit;
+    };
+    const q = {
+      select: () => q,
+      eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), q),
+      in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), q),
+      single: async () => ({ data: apply()[0] ?? null, error: apply()[0] ? null : { message: "none" } }),
+      insert: (row: Record<string, unknown>) => {
+        const r = { id: `${t}-${tables[t].length + 1}`, ...row };
+        tables[t].push(r);
+        rows = () => [r];
+        return q;
+      },
+      upsert: async (input: Record<string, unknown> | Record<string, unknown>[]) => {
+        for (const row of Array.isArray(input) ? input : [input]) {
+          const k = t === "integration_tokens" ? "integration_id" : "id";
+          const cur = tables[t].find((r) => r[k] === row[k]);
+          if (cur) Object.assign(cur, row);
+          else tables[t].push({ ...row });
+        }
+        return { error: null };
+      },
+      update: (patch: Record<string, unknown>) => ((pendingUpdate = patch), q),
+      then: (res: (v: unknown) => void) => res({ data: apply(), error: null }),
+    };
+    return q;
+  };
+  return { tables, db: { from } };
+}
+
+describe("runSchoolSync (end to end with fakes)", () => {
+  const integration: Integration = { id: "int1", user_id: "u1", provider: "canvas", settings: { baseUrl: "https://school.instructure.com" } };
+
+  it("fetches every page, writes classes and grades, and records success", async () => {
+    const { db, tables } = fakeDb();
+    const key = await importKey(KEY_B64);
+    await saveSecret(db, key, "int1", "canvas-token-abcdefghijklmnop");
+    const seen: string[] = [];
+    const fakeFetch = (async (url: string, init?: RequestInit) => {
+      seen.push(url);
+      expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer canvas-token-abcdefghijklmnop");
+      if (url.includes("/courses?") && !url.includes("page=2"))
+        return new Response(JSON.stringify([canvasCourses[0]]), { headers: { link: `<${url}&page=2>; rel="next"` } });
+      if (url.includes("page=2")) return new Response(JSON.stringify([canvasCourses[1]]));
+      const id = url.match(/courses\/(\d+)\/assignment_groups/)![1];
+      return new Response(JSON.stringify(canvasGroups[id as "101"]));
+    }) as typeof fetch;
+    const changed = await runSchoolSync(integration, { db, key, fetch: fakeFetch, now: () => new Date("2026-11-27T12:00:00Z") });
+    expect(changed).toBe(2 + 2 + 5);
+    expect(tables.courses.map((c) => c.name)).toEqual(["AP Biology", "Art"]);
+    expect(tables.grade_items).toHaveLength(5);
+    expect(tables.integrations[0]).toMatchObject({ status: "connected", last_error: null });
+    expect(tables.sync_runs[0]).toMatchObject({ status: "ok", items_upserted: 9 });
+    expect(seen.filter((u) => u.includes("assignment_groups"))).toHaveLength(2);
+  });
+
+  it("marks the connection as needing reconnection when access was revoked", async () => {
+    const { db, tables } = fakeDb();
+    const key = await importKey(KEY_B64);
+    await saveSecret(db, key, "int1", "canvas-token-abcdefghijklmnop");
+    const revoked = (async () => new Response("{}", { status: 401 })) as unknown as typeof fetch;
+    await expect(runSchoolSync(integration, { db, key, fetch: revoked })).rejects.toBeInstanceOf(SyncError);
+    expect(tables.integrations[0]).toMatchObject({ status: "expired" });
+    expect(String(tables.integrations[0].last_error)).toMatch(/Reconnect/);
+    expect(tables.sync_runs[0]).toMatchObject({ status: "error" });
+  });
+});

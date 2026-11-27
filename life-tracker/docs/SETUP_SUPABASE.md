@@ -14,13 +14,18 @@ the device you're using.
 3. Wait for the project to finish setting up (1–2 minutes).
 
 ## 2. Create the database tables
-1. In the project, open **SQL Editor** → **New query**.
-2. Open `life-tracker/supabase/migrations/20261127000000_profiles.sql` from this
-   repository, copy all of it, paste it into the editor and click **Run**.
-3. You should see "Success. No rows returned".
+Run each file in `life-tracker/supabase/migrations/` **in order** (oldest first):
 
-This creates your profile table with privacy rules (each account can only ever
-read or change its own row) and the "delete my account" function.
+1. `20261127000000_profiles.sql` — your profile and preferences
+2. `20261127010000_academics.sql` — classes, grades, terms, grading scales
+3. `20261127020000_integrations.sql` — school connections (stored encrypted)
+
+For each: **SQL Editor → New query**, paste the whole file, **Run**, and check it
+says "Success". (With the Supabase CLI you can instead run `supabase link` and
+`supabase db push` from the `life-tracker` folder.)
+
+Every table has privacy rules: each account can only ever read or change its own
+rows, and school tokens can't be read by anyone through the app.
 
 ## 3. Turn on email-code sign-in
 Life Tracker signs you in with a 6-digit code instead of a link, because links

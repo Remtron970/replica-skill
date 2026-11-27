@@ -16,6 +16,7 @@ import {
 import { friendlyAuthError, useAuth } from "../../lib/auth";
 import { clearDeviceData, usePrefs } from "../../lib/prefs";
 import { googleEnabled } from "../../lib/supabase";
+import { useStoreSync } from "../../lib/store/StoreProvider";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -178,12 +179,17 @@ function SignIn() {
 function SignedIn() {
   const { user, signOut } = useAuth();
   const { sync, retrySync } = usePrefs();
+  const store = useStoreSync();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const status = sync.status === "synced" ? "ok" : sync.status === "syncing" ? "syncing" : sync.status === "offline" ? "offline" : sync.status === "error" ? "error" : "ok";
   return (
     <SectionCard title="Signed in" icon={ShieldCheck} accent="bg-accent-green/12 text-accent-green" sync={{ source: "Your account", syncedAt: sync.lastSyncedAt, state: status }}>
-      <ListRow title={user?.email ?? "Signed in"} subtitle="Name, theme, tab bar, Home layout and demo mode sync across your devices." />
+      <ListRow title={user?.email ?? "Signed in"} subtitle="Settings, classes and grades sync across your devices." />
+      <p className="text-[12.5px] text-muted">
+        {store.pending ? `${store.pending} change${store.pending === 1 ? "" : "s"} waiting to upload` : "Classes and grades: all changes uploaded"}
+        {store.status.lastSyncedAt ? ` · last synced ${store.status.lastSyncedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}` : ""}
+      </p>
       {sync.status === "error" && (
         <div className="mt-2">
           <ErrorState title="Couldn't sync your settings" body="Your changes are saved on this device and will sync when possible." onRetry={retrySync} />
@@ -197,8 +203,13 @@ function SignedIn() {
           onClick={async () => {
             setBusy(true);
             try {
+              await store.syncNow(); // upload anything not yet saved to the account
+              if (store.pending > 0 && !navigator.onLine) {
+                toast({ tone: "warning", title: "You're offline", body: "Connect to the internet first so your latest changes reach your account." });
+                return;
+              }
               await signOut();
-              toast({ tone: "info", title: "Signed out", body: "Your settings stay on this device." });
+              toast({ tone: "info", title: "Signed out", body: "Your account data was removed from this device. Sign in again to get it back." });
             } catch (e) {
               toast({ tone: "error", title: "Couldn't sign out", body: friendlyAuthError(e) });
             } finally {

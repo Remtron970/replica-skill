@@ -1,4 +1,6 @@
 import { averagePercent, unweightedGpa } from "../../lib/gpa";
+import type { CourseSummary } from "../academics/grades";
+import type { GradeItem } from "../academics/types";
 import { scheduleStatus, type ClassBlock } from "../../lib/schedule";
 
 /**
@@ -7,10 +9,11 @@ import { scheduleStatus, type ClassBlock } from "../../lib/schedule";
  * labeled sample generator below. Nothing is ever invented in live mode.
  */
 
-export type SourceId = "school" | "email" | "health" | "news" | "calendar" | "tasks";
+export type SourceId = "grades" | "school" | "email" | "health" | "news" | "calendar" | "tasks";
 
 export const SOURCES: Record<SourceId, { label: string; phase: number }> = {
-  school: { label: "School (grades, classes, assignments)", phase: 4 },
+  grades: { label: "Grades", phase: 4 },
+  school: { label: "Class schedule & assignments", phase: 5 },
   email: { label: "Email", phase: 6 },
   health: { label: "Health", phase: 7 },
   news: { label: "News", phase: 8 },
@@ -75,13 +78,45 @@ export interface HomeData {
   news: NewsItem[];
   steps?: { today: number; week: number };
   tasks?: { done: number; total: number };
+  /** GPA and average, computed with the user's own grading settings. */
+  grades?: { gpa: number | null; average: number | null };
 }
 
-const NONE: Record<SourceId, boolean> = { school: false, email: false, health: false, news: false, calendar: false, tasks: false };
+const NONE: Record<SourceId, boolean> = { grades: false, school: false, email: false, health: false, news: false, calendar: false, tasks: false };
 
-/** Live data. No integrations exist yet (they arrive in Phases 4–9), so it is empty and says so. */
-export function liveData(): HomeData {
-  return { mode: "live", connected: NONE, courses: [], schedule: [], assignments: [], emails: [], events: [], gradeUpdates: [], news: [] };
+export interface LiveInputs {
+  /** Classes in the current term, with grades worked out (Academics). */
+  summaries: CourseSummary[];
+  items: GradeItem[];
+  gpa: number | null;
+  average: number | null;
+}
+
+/**
+ * Live data from what the user has actually entered or connected. Sources that
+ * don't exist yet stay empty and are reported as unavailable.
+ */
+export function liveData(input?: LiveInputs, now = new Date()): HomeData {
+  const hasGrades = !!input && input.summaries.length > 0;
+  const nameOf = new Map(input?.summaries.map((s) => [s.course.id, s.course.name]) ?? []);
+  const gradeUpdates: GradeUpdate[] = hasGrades
+    ? input!.items
+        .filter((i) => i.gradedOn && i.earned !== null && i.possible && nameOf.has(i.courseId))
+        .map((i) => ({ id: i.id, course: nameOf.get(i.courseId)!, title: i.title, percent: Math.round(((i.earned as number) / (i.possible as number)) * 1000) / 10, at: new Date(`${i.gradedOn}T12:00:00`) }))
+        .filter((g) => now.getTime() - g.at.getTime() <= 2 * DAY && g.at.getTime() <= now.getTime() + DAY)
+    : [];
+  return {
+    mode: "live",
+    connected: { ...NONE, grades: hasGrades },
+    courses: hasGrades ? input!.summaries.filter((s) => s.result.percent !== null).map((s) => ({ id: s.course.id, name: s.course.name, teacher: s.course.teacher, percent: s.result.percent as number, credits: s.course.credits })) : [],
+    schedule: [],
+    assignments: [],
+    emails: [],
+    events: [],
+    gradeUpdates,
+    news: [],
+    grades: hasGrades ? { gpa: input!.gpa, average: input!.average } : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +162,7 @@ export function demoData(now: Date): HomeData {
 
   return {
     mode: "demo",
-    connected: { school: true, email: true, health: true, news: true, calendar: true, tasks: true },
+    connected: { grades: true, school: true, email: true, health: true, news: true, calendar: true, tasks: true },
     courses,
     schedule,
     assignments: [
@@ -177,8 +212,8 @@ export interface Stats {
 export function computeStats(d: HomeData, now: Date): Stats {
   const t = now.getTime();
   return {
-    gpa: d.connected.school ? unweightedGpa(d.courses) : undefined,
-    average: d.connected.school ? averagePercent(d.courses) : undefined,
+    gpa: d.connected.grades ? (d.grades ? (d.grades.gpa ?? undefined) : unweightedGpa(d.courses)) : undefined,
+    average: d.connected.grades ? (d.grades ? (d.grades.average ?? undefined) : averagePercent(d.courses)) : undefined,
     assignmentsDue: d.connected.school ? d.assignments.filter((a) => !a.done && a.dueAt.getTime() >= t && a.dueAt.getTime() - t <= 7 * DAY).length : undefined,
     unreadEmails: d.connected.email ? d.emails.filter((e) => e.unread).length : undefined,
     stepsToday: d.connected.health ? d.steps?.today : undefined,
@@ -285,8 +320,17 @@ export function buildBriefing(d: HomeData, now: Date): Briefing {
     overdue.forEach((a) => priorities.push(`Finish the overdue ${a.course} work: ${a.title}`));
     upcoming.filter((a) => a.dueAt.getTime() - t <= 2 * DAY).forEach((a) => priorities.push(`Work on ${a.title} (${a.course}), due ${relDay(a.dueAt, now)}`));
 
+  }
+
+  if (d.connected.grades) {
+    const s = computeStats(d, now);
     const grades = d.gradeUpdates.filter((g) => t - g.at.getTime() <= 2 * DAY);
-    if (grades.length) sections.push({ title: "Grade updates", lines: grades.map((g) => `${g.course} — ${g.title}: ${g.percent}%`) });
+    if (grades.length) summary.push(`New grade${grades.length === 1 ? "" : "s"}: ${grades.map((g) => `${g.course} ${g.title} (${g.percent}%)`).join(", ")}.`);
+    const lines = [
+      ...(s.gpa !== undefined ? [`Current GPA ${s.gpa.toFixed(2)}${s.average !== undefined ? ` · average ${s.average.toFixed(1)}%` : ""}`] : []),
+      ...grades.map((g) => `${g.course} — ${g.title}: ${g.percent}%`),
+    ];
+    if (lines.length) sections.push({ title: "Grades", lines });
   }
 
   if (d.connected.email) {

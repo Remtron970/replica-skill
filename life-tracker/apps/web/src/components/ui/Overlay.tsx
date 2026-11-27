@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -53,7 +53,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
 function Scrim({ onClick, className }: { onClick: () => void; className?: string }) {
   return (
     <motion.div
-      className={cx("fixed inset-0 z-40 bg-scrim backdrop-blur-[2px]", className)}
+      className={cx("fixed inset-0 z-40 bg-scrim", className)}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.15 } }}
@@ -140,6 +140,7 @@ export function Sheet({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
+  const drag = useDragControls();
   useFocusTrap(ref, open, onClose);
   return createPortal(
     <AnimatePresence>
@@ -162,13 +163,18 @@ export function Sheet({
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: 0.2, ease: "easeIn" } }}
             transition={spring.sheet}
+            // Only the handle/title bar drags the sheet, so content inside can scroll normally.
             drag="y"
+            dragListener={false}
+            dragControls={drag}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => (info.offset.y > 90 || info.velocity.y > 600) && onClose()}
           >
-            <div className={cx("mx-auto mb-3 h-1.5 w-10 rounded-full bg-line", !mobileOnly && "md:hidden")} aria-hidden />
-            <div className="mb-3 flex items-center justify-between">
+            <div className="touch-none" onPointerDown={(e) => drag.start(e)}>
+              <div className={cx("mx-auto mb-3 h-1.5 w-10 rounded-full bg-line", !mobileOnly && "md:hidden")} aria-hidden />
+            </div>
+            <div className="mb-3 flex touch-none items-center justify-between" onPointerDown={(e) => (e.target as HTMLElement).closest("button") || drag.start(e)}>
               <h2 id={`${id}-t`} className="text-[17px] font-semibold">
                 {title}
               </h2>

@@ -114,3 +114,51 @@ app opens and navigates with the network off.
 - Stat-card numbers count up when scrolled into view.
 
 **Next step:** Phase 4 — Academics (grade entry, GPA calculator, what-if, Classroom/Canvas framework).
+
+## Phase 4 — Academics (2026-11-27)
+**Completed**
+- Local-first data engine (`src/lib/store/`): collections saved on the device,
+  synced per record with Supabase (newest edit wins, soft deletes, offline queue,
+  retries, uploads before sign-out, clears an account's data on sign-out).
+- Database: `terms`, `grading_scales`, `courses`, `grade_categories`,
+  `grade_items`, `past_courses` with RLS and the `sync_row_guard` trigger;
+  `integrations`, `integration_tokens` (unreadable through the API), `sync_runs`.
+- Grade math (`src/features/academics/grades.ts`): points, weighted categories
+  (re-normalized when a category is empty), "Portal %" mode, missing = 0,
+  excused ignored, extra credit; three preset scales + custom scales; weighted /
+  unweighted GPA with editable honors/AP/IB/dual bonuses; term and cumulative
+  GPA (past terms); grade history and 2-week trend; "What do I need?" solver.
+- Screens: Academics overview (GPA tiles, class cards with sparkline, trend and
+  missing badges, class comparison chart, past terms, terms, GPA settings);
+  class page (grade, what-if mode with projected grade and GPA, what-do-I-need,
+  categories, history chart, grade list with add/edit/delete); spreadsheet import
+  (paste or CSV file; PowerSchool/Infinite Campus copy-paste; preview, duplicate
+  skipping, row-level errors).
+- Home shows the real GPA, average and new grades; the briefing includes them.
+- School connections: Canvas (access token) and Google Classroom (OAuth) — server
+  functions `school-connect-canvas`, `google-classroom-auth`, `school-sync`;
+  shared mapping/sync code in `supabase/functions/_shared/`; Settings card with
+  connect / sync now / disconnect; guide `docs/SETUP_SCHOOL.md`.
+- Fixed along the way: bottom sheets only drag from their handle (forms inside
+  scroll properly on iPhone); a header button made Academics wider than the phone
+  screen; the overflow test now compares with the physical screen width;
+  secondary screens load on demand (main bundle 860 → 587 kB).
+
+**Verified**
+- Database: 21 checks on PostgreSQL 16 (owner-only access, newest-edit-wins
+  trigger, owner can't change, validation, tokens unreadable, connect only via
+  server, sync updates keep the user's class settings).
+- Unit: 165 tests (sync engine with two simulated devices, grade math with
+  hand-worked numbers, CSV parsing/planning, Canvas & Classroom mapping from
+  documented response shapes, sync planning, encryption, OAuth state, full sync
+  run with fake database/server incl. pagination and revoked access).
+- End-to-end: 113 checks incl. a full Academics walkthrough, accessibility scans,
+  and cross-device sync / Canvas connect / sync / disconnect against a simulated
+  Supabase. Type-checked: app and Edge Functions (Deno type shim).
+
+**Not verified yet (needs your accounts)**
+- Edge Functions haven't run on Supabase; Canvas and Google Classroom haven't
+  been tried with real accounts. The mapping follows the platforms' documented
+  API shapes, so the first real sync may reveal differences to fix.
+
+**Next step:** Phase 5 — Schedule & assignments.

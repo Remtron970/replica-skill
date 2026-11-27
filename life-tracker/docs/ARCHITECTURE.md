@@ -247,3 +247,7 @@ life-tracker/
 | 2026-11-27 | App works signed-out (device-only) | Nothing is blocked on account setup; signing in adds cross-device sync |
 | 2026-11-27 | Preferences sync last-write-wins via `prefs_updated_at` | Simple and predictable for one person on a few devices; new profiles start at 'epoch' so pre-sign-in settings aren't overwritten |
 | 2026-11-27 | Hash routes (`/#/…`) | Works on any static host and inside the PWA with no server rewrite rules |
+| 2026-11-27 | Local-first collections + per-row last-write-wins sync (`src/lib/store/`) | Grades work offline and signed-out; one tested engine reused by every later data type |
+| 2026-11-27 | Grades computed by the app, not taken from the platform | Same math for manual, imported and synced classes, and what-if works everywhere; "Portal %" mode for anyone who prefers the school's number |
+| 2026-11-27 | School tokens only in server functions, AES-GCM encrypted, unreadable via the API | A stolen phone or a bug in the app can't leak school credentials |
+| 2026-11-27 | PowerSchool / Infinite Campus via copy-paste import | No student-authorized API exists; avoids asking for school passwords |

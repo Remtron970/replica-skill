@@ -10,6 +10,7 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "types": ["vite/client", "vite-plugin-pwa/react", "node"]
   },
   "include": ["src"]

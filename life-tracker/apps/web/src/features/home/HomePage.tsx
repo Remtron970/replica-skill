@@ -41,6 +41,7 @@ import { usePrefs } from "../../lib/prefs";
 import { durationMinutes, formatTime, scheduleStatus } from "../../lib/schedule";
 import type { DashboardSectionId } from "../../lib/sync";
 import { formatClock, formatLongDate, greetingFor, useNow } from "../../lib/time";
+import { useAcademics } from "../academics/useAcademics";
 import { CustomizeDashboard } from "./CustomizeDashboard";
 import {
   buildBriefing,
@@ -55,7 +56,14 @@ import {
 export function HomePage() {
   const { prefs, update } = usePrefs();
   const now = useNow(15_000); // data refresh; the clock and countdowns tick on their own
-  const data = useMemo(() => (prefs.demo ? demoData(now) : liveData()), [prefs.demo, now]);
+  const academics = useAcademics();
+  const data = useMemo(
+    () =>
+      prefs.demo
+        ? demoData(now)
+        : liveData({ summaries: academics.summaries, items: academics.items, gpa: academics.gpa.unweighted, average: academics.average }, now),
+    [prefs.demo, now, academics],
+  );
   const [customizing, setCustomizing] = useState(false);
 
   const sections: Record<DashboardSectionId, ReactNode> = {
@@ -152,8 +160,8 @@ function ModeBanner({ demo, onToggle }: { demo: boolean; onToggle: () => void })
       <Info size={18} className="mt-0.5 shrink-0 text-brand-ink" aria-hidden />
       <div className="min-w-0 flex-1">
         <p>
-          <strong>No accounts connected yet.</strong> School, email, health and news connections arrive in Phases 4–9. Until then you can
-          preview Home with sample data.
+          <strong>No accounts connected yet.</strong> Add your classes in Academics to see your GPA here. Email, health and news connections
+          arrive in Phases 6–8. You can also preview Home with sample data.
           {!prefs.name && (
             <>
               {" "}

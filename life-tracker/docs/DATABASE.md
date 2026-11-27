@@ -1,5 +1,19 @@
 # Life Tracker — Database Design (Supabase Postgres)
 
+> **Implemented so far** (see `supabase/migrations/`): `profiles` (incl.
+> `academic_settings`), `terms`, `grading_scales`, `courses`,
+> `grade_categories`, `grade_items`, `past_courses`, `integrations`,
+> `integration_tokens`, `sync_runs`. The rest of this document is the plan for
+> later phases.
+>
+> **Sync model** (all synced tables): `id` is created on the device so records
+> can be made offline; `client_updated_at` is when the user changed it (newest
+> wins, enforced by the `sync_row_guard` trigger, which ignores older writes);
+> `updated_at` is set by the server so devices can download "changes since";
+> `deleted` is a soft delete so deletions reach every device. Synced tables
+> don't use foreign keys between each other (a device may upload a class before
+> its term); the app keeps references consistent.
+
 Conventions for every user-owned table:
 - `id uuid pk default gen_random_uuid()`
 - `user_id uuid not null references auth.users on delete cascade`

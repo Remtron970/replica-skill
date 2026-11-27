@@ -62,9 +62,13 @@ async function settle(page, ms = 500) {
 // exercise sign-in, profile sync and account deletion end to end.
 // ---------------------------------------------------------------------------
 const SB = "https://test-project.supabase.co";
+const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses"];
 async function cloudChecks() {
   const USER = { id: "8b0f7a52-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "remy@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
   const calls = [];
+  const tables = {};
+  const integrations = [];
+  let tick = 0;
   let row = {
     id: USER.id,
     display_name: "From Cloud",
@@ -100,6 +104,35 @@ async function cloudChecks() {
       return json(204);
     }
     if (u.pathname === "/rest/v1/rpc/delete_my_account") return json(204);
+    if (u.pathname === "/rest/v1/integrations" && req.method() === "GET") return json(200, integrations);
+    if (u.pathname === "/rest/v1/integrations" && req.method() === "PATCH") {
+      integrations.forEach((r) => Object.assign(r, body));
+      return json(204);
+    }
+    if (u.pathname === "/functions/v1/school-connect-canvas") {
+      if (!body?.baseUrl || !body?.token) return json(400, { error: "Enter your school's Canvas address and the access token." });
+      integrations.push({ id: "int-canvas", provider: "canvas", status: "connected", account_label: "Remy · school.instructure.com", last_sync_at: new Date().toISOString(), last_error: null });
+      return json(200, { ok: true, changed: 9 });
+    }
+    if (u.pathname === "/functions/v1/school-sync") return json(200, { results: { canvas: { ok: true, changed: 0 } } });
+    // Synced tables (courses, grade_items, …): upsert + "changed since" reads, with newest-edit-wins.
+    const table = u.pathname.replace("/rest/v1/", "");
+    if (SYNC_TABLES.includes(table)) {
+      const t = (tables[table] ??= new Map());
+      if (req.method() === "POST") {
+        for (const r of Array.isArray(body) ? body : [body]) {
+          const cur = t.get(r.id);
+          if (cur && Date.parse(r.client_updated_at) < Date.parse(cur.client_updated_at)) continue;
+          t.set(r.id, { ...r, updated_at: new Date(Date.now() + ++tick).toISOString() });
+        }
+        return json(201);
+      }
+      if (req.method() === "GET") {
+        const since = u.searchParams.get("updated_at")?.replace(/^gt\./, "");
+        const rows = [...t.values()].filter((r) => (since ? Date.parse(r.updated_at) > Date.parse(since) : !r.deleted)).sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at));
+        return json(200, rows);
+      }
+    }
     return json(404, { message: "not mocked" });
   });
 
@@ -145,6 +178,46 @@ async function cloudChecks() {
   ok((await c.inputValue("#name")) === "Changed Elsewhere", "newer cloud settings replace older device settings");
   ok(await c.evaluate(() => document.documentElement.classList.contains("dark")), "theme from the cloud copy applied");
 
+  await c.goto(`${CURL}#/academics`);
+  await settle(c, 500);
+  await c.getByRole("button", { name: "Add a class" }).click();
+  await c.getByRole("textbox", { name: "Class name" }).fill("Synced Physics");
+  await c.getByRole("dialog").getByRole("button", { name: "Add class" }).click();
+  await settle(c, 3000);
+  const up = calls.find((x) => x.method === "POST" && x.path.startsWith("/rest/v1/courses"));
+  ok(up?.body?.[0]?.name === "Synced Physics" && up?.body?.[0]?.user_id === USER.id && up?.auth === "Bearer test-access", "a new class uploads to the account (as the user)");
+  {
+    // A second device signed in to the same account downloads it.
+    const c2 = await ctx.newPage();
+    await c2.goto(`${CURL}#/academics`);
+    await settle(c2, 2500);
+    ok(await c2.getByText("Synced Physics").first().isVisible(), "the class appears on another signed-in device");
+    await c2.close();
+  }
+
+  await c.goto(`${CURL}#/settings`);
+  await settle(c, 800);
+  const school = c.getByRole("region", { name: "School connections" });
+  await school.getByRole("button", { name: "Connect" }).nth(1).click(); // Canvas
+  const canvasSheet = c.getByRole("dialog", { name: "Connect Canvas" });
+  await canvasSheet.getByRole("button", { name: "Connect Canvas" }).click();
+  ok(await canvasSheet.getByText(/Enter your school's Canvas address/).isVisible(), "Canvas form asks for the address and token");
+  await canvasSheet.getByRole("textbox", { name: "Canvas address" }).fill("school.instructure.com");
+  await canvasSheet.getByLabel("Access token").fill("1234~abcdefghijklmnopqrstuvwxyz");
+  await canvasSheet.getByRole("button", { name: "Connect Canvas" }).click();
+  await settle(c, 1000);
+  const connectCall = calls.find((x) => x.path === "/functions/v1/school-connect-canvas");
+  ok(connectCall?.body?.baseUrl === "school.instructure.com" && connectCall?.auth === "Bearer test-access", "token is sent to the server function (as the user), not stored in the app");
+  ok(await c.getByText("Canvas connected").isVisible(), "Canvas connection confirmed");
+  ok((await school.innerText()).includes("Remy · school.instructure.com"), "connection shows its account and status");
+  if (SHOTS) await c.screenshot({ path: `${SHOTS}/phone-school-connected.png` });
+  await school.getByRole("button", { name: "Sync now" }).click();
+  await settle(c, 800);
+  ok(await c.getByText("School data synced").isVisible(), "Sync now runs a school sync");
+  await school.getByRole("button", { name: "Disconnect" }).click();
+  await settle(c, 800);
+  ok(calls.some((x) => x.method === "PATCH" && x.path.startsWith("/rest/v1/integrations") && x.body?.status === "disconnected"), "Disconnect switches the connection off");
+
   await c.goto(`${CURL}#/account`);
   await settle(c, 500);
   ok(await c.getByText("remy@example.com").isVisible(), "account page shows the signed-in email");
@@ -178,7 +251,8 @@ try {
       await p.goto(`${URL}#/${r}`);
       await settle(p, 900);
       const h1 = (await p.locator("h1").first().innerText()).split("\n")[0];
-      const overflow = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      // Compare with the physical screen: an overflowing page also widens innerWidth on phones.
+      const overflow = await p.evaluate(() => document.documentElement.scrollWidth > window.screen.width || window.innerWidth > window.screen.width);
       const v = await axe(p);
       ok(!!h1 && !overflow && v.length === 0, `/${r} → "${h1}"${overflow ? " HORIZONTAL SCROLL" : ""}${v.length ? " a11y: " + v.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
       if (v.length) for (const x of v) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
@@ -307,6 +381,125 @@ try {
     await ctx.close();
   }
 
+  console.log("\nAcademics: classes, grades, categories, what-if, import, GPA");
+  {
+    const ctx = await browser.newContext({ ...devices["iPhone 15"] });
+    const g = await ctx.newPage();
+    watch(g, "academics");
+    await g.goto(`${URL}#/academics`);
+    await settle(g);
+    ok(await g.getByText("Add your classes").isVisible(), "empty state explains how to start");
+    // Class 1: points
+    await g.getByRole("button", { name: "Add a class" }).click();
+    await g.getByRole("dialog").getByRole("button", { name: "Add class" }).click();
+    ok(await g.getByText("Enter the class name.").isVisible(), "class form requires a name");
+    await g.getByRole("textbox", { name: "Class name" }).fill("Biology");
+    await g.getByRole("combobox", { name: /Level/ }).selectOption("honors");
+    await g.getByRole("dialog").getByRole("button", { name: "Add class" }).click();
+    await settle(g, 600);
+    ok(/#\/academics\/[0-9a-f-]{36}$/.test(g.url()), "new class opens its page");
+    const addGrade = async (title, earned, possible, extra) => {
+      await g.getByRole("button", { name: "Add grade" }).first().click();
+      await g.getByRole("dialog").getByRole("textbox", { name: "Assignment", exact: true }).fill(title);
+      await g.getByRole("dialog").getByRole("textbox", { name: "Score", exact: true }).fill(earned);
+      await g.getByRole("dialog").getByRole("textbox", { name: "Out of", exact: true }).fill(possible);
+      if (extra) await extra();
+      await g.getByRole("dialog").getByRole("button", { name: "Add grade" }).click();
+      await g.getByRole("dialog").waitFor({ state: "detached", timeout: 2000 }).catch(() => {});
+    };
+    await addGrade("Quiz 1", "18", "20");
+    await addGrade("Test 1", "45", "50");
+    ok(await g.getByText("90.0%").first().isVisible(), "points grade: (18+45)/(20+50) = 90.0%");
+    await addGrade("Lab 1", "", "10", () => g.getByRole("button", { name: "Missing (counts as 0)" }).click());
+    ok(await g.getByText("78.8%").first().isVisible(), "missing work counts as zero: 63/80 = 78.8%");
+    ok(await g.getByText("1 missing").isVisible(), "missing badge shown");
+    // What do I need
+    await g.getByRole("combobox", { name: "To end with at least" }).selectOption("90");
+    ok(await g.getByRole("status").filter({ hasText: "You need" }).innerText().then((t) => /99 out of 100/.test(t)), "what-do-I-need: (63 + x) / 180 = 90% → 99 out of 100");
+    // What-if
+    await g.getByRole("switch", { name: "What-if mode" }).click();
+    await g.getByRole("button", { name: "Add a what-if grade" }).click();
+    await g.getByRole("dialog").getByRole("textbox", { name: "Assignment", exact: true }).fill("Final");
+    await g.getByRole("dialog").getByRole("textbox", { name: "Score", exact: true }).fill("100");
+    await g.getByRole("dialog").getByRole("textbox", { name: "Out of", exact: true }).fill("100");
+    await g.getByRole("dialog").getByRole("button", { name: "Add what-if grade" }).click();
+    await settle(g, 400);
+    ok(await g.getByText(/Projected grade: 90\.6%/).isVisible(), "what-if projects (63 + 100) / 180 = 90.6%");
+    if (SHOTS) await g.screenshot({ path: `${SHOTS}/phone-course.png`, fullPage: true });
+    const v1 = await axe(g);
+    ok(v1.length === 0, `class page passes axe${v1.length ? ": " + v1.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (v1.length) for (const x of v1) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    await g.getByRole("switch", { name: "What-if mode" }).click();
+    ok(!(await g.getByText(/Projected grade/).count()), "turning what-if off discards pretend grades");
+
+    // Class 2: weighted categories via import + categories
+    await g.goto(`${URL}#/academics/import`);
+    await settle(g);
+    await g.getByRole("textbox", { name: "Grade table" }).fill("Course\tAssignment\tCategory\tScore\tOut of\tDate\nChemistry\tUnit test\tTests\t80\t100\t11/20/2026\nChemistry\tHW 1\tHomework\t10\t10\t11/21/2026\nChemistry\tbad row\tHomework\tgreat\t10\t11/21/2026");
+    await settle(g, 300);
+    ok(await g.getByText("2 new grades").isVisible() && await g.getByText("1 row can't be read").isVisible(), "import preview counts new and unreadable rows");
+    const v2 = await axe(g);
+    ok(v2.length === 0, `import page passes axe${v2.length ? ": " + v2.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (SHOTS) await g.screenshot({ path: `${SHOTS}/phone-import.png`, fullPage: true });
+    await g.getByRole("button", { name: "Import 2 grades" }).click();
+    await settle(g, 500);
+    ok(g.url().endsWith("#/academics"), "import returns to Academics");
+    await g.goto(`${URL}#/academics/import`);
+    await settle(g);
+    await g.getByRole("textbox", { name: "Grade table" }).fill("Course\tAssignment\tCategory\tScore\tOut of\tDate\nChemistry\tUnit test\tTests\t80\t100\t11/20/2026");
+    await settle(g, 300);
+    ok(await g.getByText("1 already imported (skipped)").isVisible(), "importing the same grades again skips duplicates");
+    await g.goto(`${URL}#/academics`);
+    await settle(g, 600);
+    await g.getByRole("button", { name: /Chemistry/ }).click();
+    await settle(g, 500);
+    ok(await g.getByText("81.8%").first().isVisible(), "imported class: 90/110 = 81.8% by points");
+    await g.getByRole("button", { name: "Edit class" }).click();
+    await g.getByRole("radio", { name: "Categories" }).click();
+    await g.getByRole("dialog").getByRole("button", { name: "Save class" }).click();
+    await settle(g, 500);
+    await g.getByRole("button", { name: "Edit", exact: true }).click();
+    await g.locator("#cat-weight-0").fill("60");
+    await g.locator("#cat-weight-1").fill("40");
+    await g.getByRole("button", { name: "Save categories" }).click();
+    await settle(g, 500);
+    ok(await g.getByText("88.0%").first().isVisible(), "weighted: 0.6×80 + 0.4×100 = 88.0%");
+
+    // Overview, past class, GPA settings
+    await g.goto(`${URL}#/academics`);
+    await settle(g, 1500);
+    await g.getByRole("button", { name: "Add", exact: true }).click();
+    await g.getByRole("textbox", { name: "Term", exact: true }).fill("Spring 2026");
+    await g.getByRole("textbox", { name: "Class", exact: true }).fill("Art");
+    await g.getByRole("combobox", { name: "Final grade" }).selectOption("C");
+    await g.getByRole("button", { name: "Add past class" }).click();
+    await g.keyboard.press("Escape");
+    await settle(g, 1500);
+    // Biology 78.75 → C+ 2.3 (honors), Chemistry 88 → B+ 3.3 → term (2.3+3.3)/2 = 2.80; weighted (2.8+3.3)/2 = 3.05
+    const tiles = await g.locator("section[aria-label=Summary]").innerText();
+    ok(tiles.includes("2.80") && tiles.includes("3.05"), `GPA tiles: unweighted 2.80, weighted 3.05 (honors +0.5)`);
+    ok(tiles.includes("2.53"), "cumulative GPA includes past class: (2.3+3.3+2.0)/3 = 2.53");
+    const v3 = await axe(g);
+    ok(v3.length === 0, `Academics overview passes axe${v3.length ? ": " + v3.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (v3.length) for (const x of v3) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    if (SHOTS) await g.screenshot({ path: `${SHOTS}/phone-academics.png`, fullPage: true });
+    await g.getByRole("button", { name: "GPA settings" }).click();
+    await g.getByRole("combobox", { name: "Default grading scale" }).selectOption({ label: "Letters only · A = 90–100" });
+    await g.getByRole("button", { name: "Save GPA settings" }).click();
+    await settle(g, 1500);
+    // Biology 78.75 → C (2), Chemistry 88 → B (3) → 2.50
+    ok((await g.locator("section[aria-label=Summary]").innerText()).includes("2.50"), "changing the grading scale recalculates GPA (2.50)");
+    await g.reload();
+    await settle(g, 1500);
+    ok((await g.locator("section[aria-label=Summary]").innerText()).includes("2.50"), "classes, grades and settings persist after reload");
+    await g.goto(URL);
+    await settle(g, 1500);
+    await g.getByRole("heading", { name: "At a glance" }).scrollIntoViewIfNeeded();
+    await g.waitForTimeout(1200);
+    ok((await g.getByRole("button", { name: /Current GPA/ }).innerText()).includes("2.50"), "Home shows the real GPA");
+    await ctx.close();
+  }
+
   console.log("\nAccount (cloud sync not configured)");
   {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
@@ -314,12 +507,19 @@ try {
     watch(a, "account");
     await a.goto(`${URL}#/settings`);
     await settle(a);
+    const sc = a.getByRole("region", { name: "School connections" });
+    ok((await sc.innerText()).includes("Needs sign-in"), "school connections explain they need sign-in");
+    await sc.getByRole("button", { name: /PowerSchool/ }).click();
+    await settle(a, 300);
+    ok(a.url().endsWith("#/academics/import"), "PowerSchool/Infinite Campus point to Import");
+    await a.goto(`${URL}#/settings`);
+    await settle(a);
     await a.fill("#name", "Remy");
     await a.getByRole("button", { name: "Save", exact: true }).click();
     await a.getByRole("button", { name: /Cloud sync not set up yet/ }).click();
     await settle(a, 300);
     ok(a.url().endsWith("#/account"), "Settings → Account");
-    ok(await a.getByText("Cloud sync isn't set up yet").isVisible(), "explains cloud sync is waiting for setup");
+    ok(await a.getByText("Cloud sync isn't set up yet").waitFor({ timeout: 4000 }).then(() => true, () => false), "explains cloud sync is waiting for setup");
     const [dl] = await Promise.all([a.waitForEvent("download"), a.getByRole("button", { name: "Export my data" }).click()]);
     const json = JSON.parse(readFileSync(await dl.path(), "utf8"));
     ok(json.app === "Life Tracker" && json.preferences.name === "Remy", "export downloads a JSON copy of your data");

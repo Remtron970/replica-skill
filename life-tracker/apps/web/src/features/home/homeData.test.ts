@@ -13,8 +13,33 @@ describe("live mode (nothing connected)", () => {
     const b = buildBriefing(d, now);
     expect(b.sections).toEqual([]);
     expect(b.priorities).toEqual([]);
-    expect(b.unavailable.map((u) => u.label)).toHaveLength(6);
+    expect(b.unavailable.map((u) => u.label)).toHaveLength(7);
     expect(b.summary).toMatch(/connect your accounts/i);
+  });
+});
+
+describe("live mode with grades entered", () => {
+  const summaries = [
+    { course: { id: "c1", name: "Biology", teacher: "", credits: 1 }, result: { percent: 92, graded: 2, missing: 0, categories: [], uncounted: 0 }, letter: "A-", points: 3.7, bands: [] },
+  ] as unknown as Parameters<typeof liveData>[0] extends infer T ? (T extends { summaries: infer S } ? S : never) : never;
+  const items = [
+    { id: "i1", courseId: "c1", title: "Quiz 3", earned: 9, possible: 10, gradedOn: "2026-11-24", clientUpdatedAt: 1, deleted: false, source: "manual", categoryId: null, dueOn: null, excused: false, missing: false, notes: "" },
+    { id: "i2", courseId: "c1", title: "Old test", earned: 40, possible: 50, gradedOn: "2026-10-01", clientUpdatedAt: 1, deleted: false, source: "manual", categoryId: null, dueOn: null, excused: false, missing: false, notes: "" },
+  ] as never;
+  const d = liveData({ summaries, items, gpa: 3.7, average: 92 }, now);
+  it("uses the user's GPA and average; other sources stay empty", () => {
+    const s = computeStats(d, now);
+    expect(s.gpa).toBe(3.7);
+    expect(s.average).toBe(92);
+    expect(s.assignmentsDue).toBeUndefined();
+    expect(s.unreadEmails).toBeUndefined();
+  });
+  it("recent grades show in Important and the briefing; Grades is no longer unavailable", () => {
+    expect(importantItems(d, now).map((i) => i.title)).toEqual(["Biology: Quiz 3"]);
+    const b = buildBriefing(d, now);
+    expect(b.summary).toMatch(/New grade: Biology Quiz 3 \(90%\)/);
+    expect(b.sections.find((s) => s.title === "Grades")?.lines[0]).toBe("Current GPA 3.70 · average 92.0%");
+    expect(b.unavailable.map((u) => u.label)).not.toContain("Grades");
   });
 });
 
