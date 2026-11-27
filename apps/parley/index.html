@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parley — free AI chat</title>
+  <meta name="description" content="A free AI chat assistant that runs entirely in your browser. No account, no API key, no server." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Conversations">
+      <div class="sidebar-top">
+        <div class="brand"><span class="logo" aria-hidden="true">◆</span> Parley</div>
+        <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close sidebar">✕</button>
+      </div>
+      <button class="new-chat" id="newChat">＋ New chat</button>
+      <input class="search" id="search" type="search" placeholder="Search chats" aria-label="Search chats" />
+      <nav class="chat-list" id="chatList"></nav>
+      <div class="sidebar-bottom">
+        <button class="link-btn" id="openSettings">⚙ Settings</button>
+        <span class="free-badge">100% free · runs on your device</span>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="openSidebar" aria-label="Open sidebar">☰</button>
+        <label class="model-pick">
+          <span class="sr-only">Model</span>
+          <select id="modelSelect" aria-label="Model"></select>
+        </label>
+        <span class="status" id="status" role="status" aria-live="polite">Model not loaded</span>
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle light and dark theme">☾</button>
+      </header>
+
+      <div class="progress" id="progress" hidden><div class="bar" id="progressBar"></div></div>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <section class="empty" id="empty">
+        <h1>What can I help with?</h1>
+        <p class="sub">Private and free. The AI model runs on your own device — nothing you type leaves your browser.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </section>
+
+      <form class="composer" id="composer">
+        <div class="composer-box">
+          <textarea id="input" rows="1" placeholder="Message Parley…" aria-label="Message"></textarea>
+          <button type="submit" class="send" id="send" aria-label="Send">↑</button>
+          <button type="button" class="send stop" id="stop" aria-label="Stop generating" hidden>■</button>
+        </div>
+        <p class="hint">Small local models can be wrong. Check important facts. First load downloads the model once (~0.3–2 GB), then it's cached.</p>
+      </form>
+    </main>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>Settings</h2>
+      <label>Engine
+        <select id="engineSelect">
+          <option value="webllm">In-browser (WebGPU) — no install</option>
+          <option value="ollama">Ollama on this computer</option>
+        </select>
+      </label>
+      <label id="ollamaUrlRow">Ollama URL
+        <input id="ollamaUrl" type="url" value="http://localhost:11434" />
+      </label>
+      <label>Custom instructions (system prompt)
+        <textarea id="systemPrompt" rows="4"></textarea>
+      </label>
+      <label>Temperature <output id="tempOut">0.7</output>
+        <input id="temperature" type="range" min="0" max="1.5" step="0.1" value="0.7" />
+      </label>
+      <div class="settings-actions">
+        <button type="button" class="danger" id="clearAll">Delete all chats</button>
+        <button value="close" class="primary">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
