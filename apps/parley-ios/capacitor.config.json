@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.remtron970.parley",
+  "appName": "Parley",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#16171b",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

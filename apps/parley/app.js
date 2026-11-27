@@ -3,19 +3,25 @@
 import { marked } from "./vendor/marked.esm.js";
 import DOMPurify from "./vendor/purify.es.mjs";
 
+// True inside the native iOS app (Capacitor). The web build ignores this.
+const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+
 const WEBLLM_URL = "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm";
 
 // Open-weight models WebLLM ships prebuilt. Sizes are approximate download sizes.
 const WEBLLM_MODELS = [
-  { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 1.5B · balanced (~1 GB)" },
-  { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 1B · fast (~0.9 GB)" },
+  { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", phone: true, label: "Qwen 2.5 1.5B · balanced (~1 GB)" },
+  { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", phone: true, label: "Llama 3.2 1B · fast (~0.9 GB)" },
   { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", label: "Llama 3.2 3B · smarter (~2 GB)" },
   { id: "Qwen2.5-3B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 3B · smarter (~2 GB)" },
   { id: "Phi-3.5-mini-instruct-q4f16_1-MLC", label: "Phi 3.5 mini · reasoning (~2.2 GB)" },
-  { id: "gemma-2-2b-it-q4f16_1-MLC", label: "Gemma 2 2B (~1.4 GB)" },
-  { id: "SmolLM2-360M-Instruct-q4f16_1-MLC", label: "SmolLM2 360M · tiny (~0.3 GB)" },
-  { id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 0.5B · tiny (~0.4 GB)" },
+  { id: "gemma-2-2b-it-q4f16_1-MLC", phone: true, label: "Gemma 2 2B (~1.4 GB)" },
+  { id: "SmolLM2-360M-Instruct-q4f16_1-MLC", phone: true, label: "SmolLM2 360M · tiny (~0.3 GB)" },
+  { id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", phone: true, label: "Qwen 2.5 0.5B · tiny (~0.4 GB)" },
 ];
+
+// On phones, only offer models that fit in an iPhone's memory budget.
+const MODELS = IS_NATIVE ? WEBLLM_MODELS.filter((m) => m.phone) : WEBLLM_MODELS;
 
 const SUGGESTIONS = [
   "Explain how vaccines train the immune system, simply",
@@ -62,7 +68,11 @@ const els = {
   systemPrompt: $("systemPrompt"), temperature: $("temperature"), tempOut: $("tempOut"),
 };
 
-const setStatus = (text) => { els.status.textContent = text; };
+const setStatus = (text) => {
+  els.status.textContent = text;
+  // "idle" messages are hidden on narrow screens to give the model menu room; progress and errors stay visible.
+  els.status.dataset.state = /^(Ready|Ollama connected|Model loads)/.test(text) ? "idle" : "busy";
+};
 const setProgress = (fraction) => {
   if (fraction == null) { els.progress.hidden = true; return; }
   els.progress.hidden = false;
@@ -75,6 +85,7 @@ const webllmEngine = {
   engine: null, loadedModel: null, loading: null,
   async ensureReady(model) {
     if (!("gpu" in navigator)) {
+      if (IS_NATIVE) throw new Error("Parley needs iOS 26 or later to run the AI on this iPhone. Please update iOS in Settings → General → Software Update.");
       throw new Error("This browser has no WebGPU. Use a recent Chrome, Edge or Safari 26+, or switch the engine to Ollama in Settings.");
     }
     if (this.engine && this.loadedModel === model) return;
@@ -86,7 +97,9 @@ const webllmEngine = {
       try { webllm = await import(WEBLLM_URL); }
       catch { throw new Error("Couldn't download the AI engine. Check your internet connection (only the first load needs it), or switch the engine to Ollama in Settings."); }
       const initProgressCallback = (r) => { setStatus(r.text); setProgress(r.progress); };
-      if (!this.engine) this.engine = await webllm.CreateMLCEngine(model, { initProgressCallback });
+      // In the iOS app, store model weights in IndexedDB, which is reliable inside WKWebView.
+      const appConfig = { ...webllm.prebuiltAppConfig, useIndexedDBCache: IS_NATIVE };
+      if (!this.engine) this.engine = await webllm.CreateMLCEngine(model, { initProgressCallback, appConfig });
       else await this.engine.reload(model);
       this.loadedModel = model;
       setProgress(null);
@@ -167,7 +180,8 @@ async function populateModels() {
       setStatus("Can't reach Ollama at " + state.settings.ollamaUrl + " — see README");
     }
   } else {
-    for (const m of WEBLLM_MODELS) sel.add(new Option(m.label, m.id, false, m.id === state.settings.model));
+    if (!MODELS.some((m) => m.id === state.settings.model)) state.settings.model = MODELS[0].id;
+    for (const m of MODELS) sel.add(new Option(m.label, m.id, false, m.id === state.settings.model));
     setStatus(webllmEngine.loadedModel === state.settings.model ? "Ready · " + labelFor(state.settings.model) : "Model loads on your first message");
   }
   saveSettings();
@@ -495,7 +509,13 @@ const installBtn = $("installApp");
 const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+if (IS_NATIVE) {
+  // Native app: no install button, no service worker, and no Ollama (there's no local server on a phone).
+  state.settings.engine = "webllm";
+  els.engineSelect.querySelector('option[value="ollama"]')?.remove();
+  els.engineSelect.closest("label").hidden = true;
+  document.documentElement.classList.add("native");
+} else if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 window.addEventListener("beforeinstallprompt", (e) => {
@@ -504,7 +524,7 @@ window.addEventListener("beforeinstallprompt", (e) => {
   installBtn.hidden = false;
 });
 window.addEventListener("appinstalled", () => { installPrompt = null; installBtn.hidden = true; });
-if (!isStandalone() && isIOS) installBtn.hidden = false; // iOS has no install prompt; show instructions
+if (!IS_NATIVE && !isStandalone() && isIOS) installBtn.hidden = false; // iOS has no install prompt; show instructions
 installBtn.addEventListener("click", async () => {
   if (installPrompt) {
     installPrompt.prompt();
