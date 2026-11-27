@@ -2,7 +2,7 @@
   "name": "parley-ios",
   "private": true,
   "version": "1.0.0",
-  "description": "Native iOS wrapper for Parley (apps/parley), built with Capacitor.",
+  "description": "Native iOS wrapper for Remtron5000 (apps/parley), built with Capacitor.",
   "scripts": {
     "copy-web": "node scripts/copy-web.mjs",
     "sync": "npm run copy-web && cap sync ios",

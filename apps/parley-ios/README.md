@@ -1,4 +1,4 @@
-# Parley for iPhone (App Store)
+# Remtron5000 for iPhone (App Store)
 
 This folder is the native iOS app. It wraps the web app in `../parley` with
 [Capacitor](https://capacitorjs.com), so the website and the iPhone app share
@@ -6,7 +6,7 @@ one codebase. You don't need a Mac: GitHub builds, signs and uploads the app
 for you on its free macOS machines.
 
 ```
-capacitor.config.json   app id (io.github.remtron970.parley) and name
+capacitor.config.json   app id (io.github.remtron970.remtron5000) and name
 ios/App/                the Xcode project (iOS 26+, iPhone only)
 scripts/copy-web.mjs    copies ../parley into www/ before each build
 ExportOptions.plist     tells Xcode to upload to App Store Connect
@@ -22,11 +22,10 @@ Approval usually takes from a few hours to two days.
 
 ### 2. Create the app in App Store Connect
 Open <https://appstoreconnect.apple.com>, then **Apps**, then **+** and **New App**:
-- Platform: iOS. Name: **Parley: Private AI Chat**. If that name is taken, try
-  something like "Parley AI: On-Device Chat".
-- Bundle ID: register **io.github.remtron970.parley** first under
+- Platform: iOS. Name: **Remtron5000: Private AI Chat**.
+- Bundle ID: register **io.github.remtron970.remtron5000** first under
   Certificates, Identifiers & Profiles, then Identifiers, then **+** and App IDs.
-- SKU: `parley-ios`.
+- SKU: `remtron5000-ios`.
 
 ### 3. Make an API key so GitHub can sign and upload
 In App Store Connect, open **Users and Access**, then **Integrations**, then
@@ -89,10 +88,11 @@ Whenever you change the web app, run `npm run sync` again. CI does this for you.
   app for this, the fix is to ship those files inside the app bundle, so that only
   weights are downloaded.
 - **Review risk: guideline 4.2 (minimum functionality).** Apple sometimes rejects
-  apps that are "just a website". Parley runs a full AI model on the device and works
+  apps that are "just a website". Remtron5000 runs a full AI model on the device and works
   offline, which helps. Say so in the review notes, as `store/review-notes.md` does.
 - **Screenshots** show the real app UI with sample conversations that were written
   for the listing. If you prefer, replace them with screenshots from your own
   iPhone (6.9" sizes: iPhone 16/17 Pro Max).
-- **Name and trademark.** Search the App Store and USPTO for "Parley" before you
-  submit. Apple rejects names that are already in use.
+- **Accounts are on-device.** Apple requires in-app account deletion for apps
+  with sign-up. Remtron5000 has it (Account, then Delete account). Accounts don't sync
+  between devices; adding cloud sync would need a server and an updated privacy policy.

@@ -1,7 +1,7 @@
 # App Store Connect: App Privacy answers
 
 - **Data collection:** "No, we do not collect data from this app."
-  Chats and settings are stored only on the device (WebView local storage and
+  Optional accounts (username, display name, salted password hash), chats and settings are stored only on the device (WebView local storage and
   IndexedDB). Nothing is sent to the developer or any third party.
 - **Network requests the app makes:** model files are downloaded from public CDNs
   (cdn.jsdelivr.net for the engine script; huggingface.co / raw.githubusercontent.com

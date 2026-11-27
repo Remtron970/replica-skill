@@ -69,7 +69,7 @@ jobs:
           xcodebuild archive \
             -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Parley.xcarchive" \
+            -archivePath "$RUNNER_TEMP/Remtron5000.xcarchive" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
@@ -81,7 +81,7 @@ jobs:
         run: |
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" ExportOptions.plist
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Parley.xcarchive" \
+            -archivePath "$RUNNER_TEMP/Remtron5000.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \

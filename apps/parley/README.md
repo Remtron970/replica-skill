@@ -1,6 +1,6 @@
-# Parley: free AI chat
+# Remtron5000: free AI chat
 
-Parley is a ChatGPT-style chat assistant you can use for free. There's no
+Remtron5000 is a ChatGPT-style chat assistant you can use for free. There's no
 account, no API key, no server and no monthly bill. The AI model runs **on your
 own device**, so your conversations never leave your browser.
 
@@ -14,7 +14,10 @@ copies how a chat assistant works, but not anyone's code, branding or text.
 - A chat history sidebar grouped by date, with search, rename and delete
 - Choice of 8 open-source models, from tiny (0.3 GB) to smarter (2 GB)
 - Custom instructions (system prompt) and temperature
-- Light and dark mode, and a layout that works on phones
+- An orange theme with animations, light and dark mode, and a layout that works on phones
+- An Account page: create an account, sign in and out, choose an avatar color,
+  change your password, delete your account. Each account has its own chats.
+  Accounts live on the device only (no server), so they don't sync between devices.
 - History saved in your browser (localStorage)
 
 ## Run it
@@ -32,7 +35,7 @@ To put it online for free, upload the `apps/parley` folder to any static host
 
 ## Install it as an app
 
-Parley is a Progressive Web App (PWA). It gets its own icon and window and works
+Remtron5000 is a Progressive Web App (PWA). It gets its own icon and window and works
 offline. It doesn't need an app store. Once it's online (or on `localhost`), you
 can install it:
 
@@ -45,7 +48,7 @@ can install it:
 
 Installing needs HTTPS (or `localhost`). Every host listed above gives you
 HTTPS for free. After the first run, the app and the model you chose are
-cached, so Parley opens and chats with no internet connection. Long-pressing or
+cached, so Remtron5000 opens and chats with no internet connection. Long-pressing or
 right-clicking the icon gives you a **New chat** shortcut.
 
 Want it in the Play Store or App Store later? The same folder can be wrapped
@@ -68,7 +71,7 @@ ollama pull llama3.2        # or qwen2.5:7b, mistral, gemma2 …
 ```
 
 Then open Settings, set Engine to Ollama, and pick the model from the menu at
-the top. If you host Parley somewhere other than `localhost`, allow that origin
+the top. If you host Remtron5000 somewhere other than `localhost`, allow that origin
 with `OLLAMA_ORIGINS=https://your-site.example ollama serve`.
 
 ## Files

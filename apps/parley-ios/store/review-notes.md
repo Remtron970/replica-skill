@@ -1,7 +1,7 @@
 # App Review notes (paste into App Store Connect → App Review Information → Notes)
 
-Parley is a chat assistant that runs an open-source language model on the device
-using WebGPU. No account or login is needed, so there is no demo account.
+Remtron5000 is a chat assistant that runs an open-source language model on the device
+using WebGPU. Accounts are optional and exist only on the device (no server), so no demo account is needed. Tap "Continue without an account" on the first screen, or create any username and password. Account deletion is available under Account → Delete account.
 
 To test: open the app, type any question and tap send. The first message downloads
 the selected model's weights (about 1 GB for the default "Qwen 2.5 1.5B"); a

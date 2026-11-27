@@ -3,33 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fff1e6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1f1813" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Parley" />
+  <meta name="apple-mobile-web-app-title" content="Remtron5000" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <title>Parley — free AI chat</title>
-  <meta name="description" content="A free AI chat assistant that runs entirely in your browser. No account, no API key, no server." />
+  <title>Remtron5000 — free AI chat</title>
+  <meta name="description" content="Remtron5000 is a free AI chat assistant that runs on your device. No API key, no server, no subscription." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app" id="app">
     <aside class="sidebar" id="sidebar" aria-label="Conversations">
       <div class="sidebar-top">
-        <div class="brand"><span class="logo" aria-hidden="true">◆</span> Parley</div>
+        <div class="brand"><img src="icons/icon.svg" alt="" class="brand-logo" /> <span>Remtron<b>5000</b></span></div>
         <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close sidebar">✕</button>
       </div>
-      <button class="new-chat" id="newChat">＋ New chat</button>
+      <button class="new-chat" id="newChat"><span class="plus" aria-hidden="true">＋</span> New chat</button>
       <input class="search" id="search" type="search" placeholder="Search chats" aria-label="Search chats" />
       <nav class="chat-list" id="chatList"></nav>
       <div class="sidebar-bottom">
         <button class="link-btn install-btn" id="installApp" hidden>⤓ Install app</button>
         <button class="link-btn" id="openSettings">⚙ Settings</button>
-        <span class="free-badge">100% free · runs on your device</span>
+        <button class="profile-chip" id="openAccount" aria-label="Account">
+          <span class="avatar sm" id="chipAvatar"></span>
+          <span class="chip-text"><span class="chip-name" id="chipName">Guest</span><span class="chip-sub" id="chipSub">Sign in</span></span>
+          <span class="chip-arrow" aria-hidden="true">›</span>
+        </button>
       </div>
     </aside>
     <div class="scrim" id="scrim" hidden></div>
@@ -43,6 +47,7 @@
         </label>
         <span class="status" id="status" role="status" aria-live="polite">Model not loaded</span>
         <button class="icon-btn" id="themeToggle" aria-label="Toggle light and dark theme">☾</button>
+        <button class="avatar sm top-avatar" id="topAvatar" aria-label="Account"></button>
       </header>
 
       <div class="progress" id="progress" hidden><div class="bar" id="progressBar"></div></div>
@@ -50,14 +55,15 @@
       <section class="messages" id="messages" aria-live="polite"></section>
 
       <section class="empty" id="empty">
-        <h1>What can I help with?</h1>
+        <img src="icons/icon.svg" alt="" class="hero-logo" />
+        <h1 id="greeting">What can I help with?</h1>
         <p class="sub">Private and free. The AI runs right here on your device, so nothing you type ever leaves it.</p>
         <div class="suggestions" id="suggestions"></div>
       </section>
 
       <form class="composer" id="composer">
         <div class="composer-box">
-          <textarea id="input" rows="1" placeholder="Message Parley…" aria-label="Message"></textarea>
+          <textarea id="input" rows="1" placeholder="Message Remtron5000…" aria-label="Message"></textarea>
           <button type="submit" class="send" id="send" aria-label="Send">↑</button>
           <button type="button" class="send stop" id="stop" aria-label="Stop generating" hidden>■</button>
         </div>
@@ -65,6 +71,93 @@
       </form>
     </main>
   </div>
+
+  <!-- Sign in / create account -->
+  <div class="auth" id="auth" hidden>
+    <div class="auth-blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <img src="icons/icon.svg" alt="" class="auth-logo" />
+      <h1 id="authTitle">Welcome to Remtron<b>5000</b></h1>
+      <p class="auth-sub">Your private AI assistant.</p>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabSignIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabSignUp" aria-selected="false">Create account</button>
+        <span class="tab-ink" aria-hidden="true"></span>
+      </div>
+      <form id="authForm" class="auth-form" novalidate>
+        <label id="nameRow" hidden>Your name
+          <input id="authName" autocomplete="name" maxlength="40" placeholder="e.g. Sam" />
+        </label>
+        <label>Username
+          <input id="authUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="letters, numbers, _ or ." required />
+        </label>
+        <label>Password
+          <input id="authPass" type="password" autocomplete="current-password" minlength="6" required />
+        </label>
+        <label class="check" id="bringRow" hidden><input type="checkbox" id="bringChats" checked /> Bring my guest chats into this account</label>
+        <p class="form-error" id="authError" role="alert"></p>
+        <button class="primary big" id="authSubmit">Sign in</button>
+      </form>
+      <button type="button" class="link-btn guest-btn" id="continueGuest">Continue without an account</button>
+      <p class="fine">Accounts are stored on this device only. Nothing is sent to a server.</p>
+    </div>
+  </div>
+
+  <!-- Account page -->
+  <dialog id="account" class="sheet">
+    <div class="account-page">
+      <header class="account-head">
+        <button type="button" class="icon-btn" id="closeAccount" aria-label="Close">✕</button>
+        <h2>Account</h2>
+        <span></span>
+      </header>
+
+      <section class="account-hero">
+        <div class="avatar xl" id="accAvatar"></div>
+        <h3 id="accName">Guest</h3>
+        <p class="muted" id="accHandle"></p>
+        <div class="stats">
+          <div><b id="statChats">0</b><span>chats</span></div>
+          <div><b id="statMsgs">0</b><span>messages</span></div>
+          <div><b id="statSince">—</b><span>member since</span></div>
+        </div>
+      </section>
+
+      <section class="account-guest" id="accGuest">
+        <p>You're using Remtron5000 as a guest. Create an account to keep separate chats for each person using this device.</p>
+        <div class="row-btns">
+          <button type="button" class="primary" id="accSignUp">Create account</button>
+          <button type="button" class="ghost" id="accSignIn">Sign in</button>
+        </div>
+      </section>
+
+      <section class="account-user" id="accUser">
+        <form class="card" id="profileForm">
+          <h4>Profile</h4>
+          <label>Display name <input id="profName" maxlength="40" /></label>
+          <fieldset class="swatches" id="swatches"><legend>Avatar color</legend></fieldset>
+          <button class="primary">Save profile</button>
+          <p class="form-ok" id="profileOk" role="status"></p>
+        </form>
+
+        <form class="card" id="passForm">
+          <h4>Change password</h4>
+          <input type="text" autocomplete="username" id="passUserHint" hidden />
+          <label>Current password <input type="password" id="passOld" autocomplete="current-password" /></label>
+          <label>New password <input type="password" id="passNew" autocomplete="new-password" minlength="6" /></label>
+          <p class="form-error" id="passError" role="alert"></p>
+          <p class="form-ok" id="passOk" role="status"></p>
+          <button class="ghost">Update password</button>
+        </form>
+
+        <div class="card">
+          <button type="button" class="ghost wide" id="signOut">Sign out</button>
+          <button type="button" class="danger wide" id="deleteAccount">Delete account</button>
+          <p class="fine">Deleting your account removes it and all its chats from this device.</p>
+        </div>
+      </section>
+    </div>
+  </dialog>
 
   <dialog id="settings">
     <form method="dialog" class="settings-form">
@@ -93,11 +186,13 @@
 
   <dialog id="installHelp">
     <form method="dialog" class="settings-form">
-      <h2>Install Parley</h2>
+      <h2>Install Remtron5000</h2>
       <p id="installSteps"></p>
       <div class="settings-actions"><span></span><button value="close" class="primary">Got it</button></div>
     </form>
   </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="app.js"></script>
 </body>

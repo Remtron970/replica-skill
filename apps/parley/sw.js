@@ -1,10 +1,10 @@
-// Parley service worker: makes the app installable and usable offline.
+// Remtron5000 service worker: makes the app installable and usable offline.
 // Model weights are cached by WebLLM itself (Cache API); this only handles the app shell
 // and the WebLLM engine script.
-const VERSION = "parley-v2";
+const VERSION = "r5k-v3";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
-  "./vendor/marked.esm.js", "./vendor/purify.es.mjs",
+  "./vendor/marked.esm.js", "./vendor/purify.es.mjs", "./privacy.html",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon.svg",
 ];
 const ENGINE_HOST = "cdn.jsdelivr.net";
@@ -16,7 +16,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("parley-") && k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => (k.startsWith("parley-") || k.startsWith("r5k-")) && k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
