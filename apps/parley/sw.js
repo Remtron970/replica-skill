@@ -1,7 +1,7 @@
 // Parley service worker: makes the app installable and usable offline.
 // Model weights are cached by WebLLM itself (Cache API); this only handles the app shell
 // and the WebLLM engine script.
-const VERSION = "parley-v1";
+const VERSION = "parley-v2";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./vendor/marked.esm.js", "./vendor/purify.es.mjs",
