@@ -6,7 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 
 import pkg from "./package.json" with { type: "json" };
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // Relative base so the build works from any folder or static host.
   base: "./",
@@ -14,6 +14,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // The shareable preview runs in a frame where service workers aren't allowed.
+      disable: mode === "preview",
       registerType: "prompt",
       // Icons/fonts are picked up by globPatterns below; nothing extra to include.
       manifest: {
@@ -50,4 +52,4 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
   },
-});
+}));

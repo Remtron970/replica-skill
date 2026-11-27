@@ -1,7 +1,7 @@
 import { MotionConfig } from "motion/react";
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { Link, RouterProvider, createBrowserRouter, createHashRouter, type RouteObject } from "react-router-dom";
+import { Link, RouterProvider, createBrowserRouter, createHashRouter, createMemoryRouter, type RouteObject } from "react-router-dom";
 import { SECTIONS } from "./app/sections";
 import { AppShell } from "./components/AppShell";
 import { SkeletonCard, ToastProvider } from "./components/ui";
@@ -63,7 +63,13 @@ const routes: RouteObject[] = [
 
 // Hash URLs (/#/academics) work on any static host with no server rewrites;
 // set VITE_ROUTER=browser once hosting is configured for clean URLs.
-const router = import.meta.env.VITE_ROUTER === "browser" ? createBrowserRouter(routes) : createHashRouter(routes);
+// "memory" is used by the shareable preview build, where the host page owns the URL.
+const router =
+  import.meta.env.VITE_ROUTER === "browser"
+    ? createBrowserRouter(routes)
+    : import.meta.env.VITE_ROUTER === "memory"
+      ? createMemoryRouter(routes)
+      : createHashRouter(routes);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

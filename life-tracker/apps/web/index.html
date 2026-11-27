@@ -18,7 +18,9 @@
       (function () {
         var t = "system";
         try { t = JSON.parse(localStorage.getItem("lt.prefs") || "{}").theme || "system"; } catch (e) {}
-        var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        var host = document.documentElement.getAttribute("data-theme");
+        var sys = host === "dark" || host === "light" ? host === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        var dark = t === "dark" || (t === "system" && sys);
         document.documentElement.classList.toggle("dark", dark);
       })();
     </script>

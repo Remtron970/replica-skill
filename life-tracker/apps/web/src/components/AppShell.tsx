@@ -9,6 +9,8 @@ import { Logo, Wordmark } from "./Brand";
 import { Sheet } from "./ui";
 import { UpdatePrompt } from "./UpdatePrompt";
 
+const IS_PREVIEW = import.meta.env.VITE_PREVIEW === "1";
+
 /** Desktop sidebar (≥1024px), tablet icon rail (768–1023px), phone bottom bar (<768px). */
 export function AppShell() {
   const location = useLocation();
@@ -44,7 +46,7 @@ export function AppShell() {
       </main>
       <TabBar onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
-      <UpdatePrompt />
+      {!IS_PREVIEW && <UpdatePrompt />}
     </div>
   );
 }

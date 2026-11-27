@@ -5,3 +5,5 @@ dist/
 !.env.example
 dist-cloud/
 !.env.cloudtest
+!.env.preview
+dist-preview/

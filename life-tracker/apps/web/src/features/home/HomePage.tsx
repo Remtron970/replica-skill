@@ -504,7 +504,7 @@ function InstallBanner() {
       return false;
     }
   });
-  if (installed || dismissed || !(ios || canPrompt)) return null;
+  if (import.meta.env.VITE_PREVIEW === "1" || installed || dismissed || !(ios || canPrompt)) return null;
   return (
     <SectionCard
       className="mb-5"

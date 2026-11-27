@@ -44,7 +44,10 @@ interface PrefsCtx {
 
 const Ctx = createContext<PrefsCtx | null>(null);
 
+/** The device's (or embedding page's) light/dark setting. A `data-theme` on <html> wins over the OS setting. */
 function systemDark() {
+  const host = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") : null;
+  if (host === "dark" || host === "light") return host === "dark";
   return typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
@@ -61,9 +64,14 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   // ---- theme ----
   useEffect(() => {
     const mq = matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setSysDark(mq.matches);
+    const onChange = () => setSysDark(systemDark());
     mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    const mo = new MutationObserver(onChange);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      mq.removeEventListener("change", onChange);
+      mo.disconnect();
+    };
   }, []);
 
   const isDark = prefs.theme === "dark" || (prefs.theme === "system" && sysDark);

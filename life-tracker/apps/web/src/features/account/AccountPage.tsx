@@ -222,6 +222,10 @@ function DataCard() {
   const [busy, setBusy] = useState(false);
 
   const exportData = () => {
+    if (import.meta.env.VITE_PREVIEW === "1") {
+      toast({ tone: "info", title: "Not available in this preview", body: "Downloads work in the installed app." });
+      return;
+    }
     const payload = {
       app: "Life Tracker",
       exportedAt: new Date().toISOString(),
