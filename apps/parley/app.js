@@ -1,4 +1,4 @@
-// Remtron5000 — a free AI chat app. Everything runs on the device:
+// Remtron5000: a free AI chat app. Everything runs on the device:
 // the model (WebLLM on WebGPU, or a local Ollama server), accounts and chats (localStorage).
 import { marked } from "./vendor/marked.esm.js";
 import DOMPurify from "./vendor/purify.es.mjs";
@@ -222,7 +222,7 @@ async function populateModels() {
     } catch {
       sel.add(new Option("Ollama not reachable", ""));
       state.settings.ollamaModel = "";
-      setStatus("Can't reach Ollama at " + state.settings.ollamaUrl + " — see README");
+      setStatus("Can't reach Ollama at " + state.settings.ollamaUrl + " (see README)");
     }
   } else {
     if (!MODELS.some((m) => m.id === state.settings.model)) state.settings.model = MODELS[0].id;
@@ -384,7 +384,7 @@ function openAccount() {
   $("accHandle").textContent = user ? "@" + user.username : "Not signed in";
   $("statChats").textContent = state.chats.length;
   $("statMsgs").textContent = state.chats.reduce((n, c) => n + c.messages.length, 0);
-  $("statSince").textContent = user ? new Date(user.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—";
+  $("statSince").textContent = user ? new Date(user.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "-";
   $("accGuest").hidden = !!user;
   $("accUser").hidden = !user;
   for (const id of ["passError", "passOk", "profileOk"]) $(id).textContent = "";
