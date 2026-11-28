@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpenCheck,
   CalendarClock,
@@ -46,6 +47,9 @@ import { CustomizeDashboard } from "./CustomizeDashboard";
 import { localDate } from "../academics/grades";
 import { mergeDays, summarize, thisWeek } from "../health/stats";
 import type { HealthDay } from "../health/types";
+import { feed, groupStories } from "../news/newsLogic";
+import { useNews, useWeather } from "../news/useNews";
+import { describeCode } from "../news/weather";
 import {
   buildBriefing,
   computeStats,
@@ -69,6 +73,20 @@ export function HomePage() {
   const assignments = useCollection(store.assignments);
   const emails = useCollection(store.emails);
   const healthRows = useCollection(store.health);
+  const newsFeed = useNews({ autoRefresh: false });
+  const wx = useWeather();
+  const newsItems = useMemo(
+    () =>
+      feed(groupStories(newsFeed.articles, now), { category: "top", hidden: prefs.news.hidden, muted: prefs.news.muted })
+        .slice(0, 8)
+        .map((s) => ({ id: s.lead.id, headline: s.lead.title, source: s.sources.length > 1 ? `${s.lead.sourceName} +${s.sources.length - 1}` : s.lead.sourceName, at: new Date(s.lead.publishedAt), breaking: s.breaking })),
+    [newsFeed.articles, now, prefs.news.hidden, prefs.news.muted],
+  );
+  const homeWeather = useMemo(() => {
+    if (!wx.place || !wx.weather) return undefined;
+    const today = wx.weather.days[0];
+    return { place: wx.place.label.split(",")[0], temp: wx.weather.current.temp, label: describeCode(wx.weather.current.code).label, hi: today?.hi ?? null, lo: today?.lo ?? null, alerts: (wx.alerts ?? []).map((a) => ({ id: a.id, event: a.event, area: a.area, isWarning: a.isWarning, ends: a.ends })) };
+  }, [wx.place, wx.weather, wx.alerts]);
   const data = useMemo(
     () =>
       prefs.demo
@@ -84,10 +102,12 @@ export function HomePage() {
               courseNames: new Map(academics.allCourses.map((c) => [c.id, c.name])),
               emails,
               steps: stepsFor(healthRows, now),
+              news: newsItems,
+              weather: homeWeather,
             },
             now,
           ),
-    [prefs.demo, now, academics, schedule, assignments, emails, healthRows],
+    [prefs.demo, now, academics, schedule, assignments, emails, healthRows, newsItems, homeWeather],
   );
   const [customizing, setCustomizing] = useState(false);
 
@@ -322,7 +342,8 @@ const KIND: Record<ImportantKind, { icon: typeof Mail; tone: Tone; label: string
   due: { icon: BookOpenCheck, tone: "warning", label: "Due soon", accent: "bg-accent-yellow/14 text-accent-yellow" },
   email: { icon: Mail, tone: "info", label: "Important email", accent: "bg-accent-blue/10 text-accent-blue" },
   grade: { icon: SECTION_BY_ID.academics.icon, tone: "success", label: "New grade", accent: "bg-accent-green/12 text-accent-green" },
-  news: { icon: Newspaper, tone: "brand", label: "Developing", accent: "bg-brand-soft text-brand-ink" },
+  news: { icon: Newspaper, tone: "danger", label: "Breaking", accent: "bg-brand-soft text-brand-ink" },
+  weather: { icon: AlertTriangle, tone: "danger", label: "Weather warning", accent: "bg-accent-red/10 text-accent-red" },
   event: { icon: CalendarClock, tone: "neutral", label: "Today", accent: "bg-surface-2 text-muted" },
 };
 

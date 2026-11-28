@@ -62,7 +62,31 @@ async function settle(page, ms = 500) {
 // exercise sign-in, profile sync and account deletion end to end.
 // ---------------------------------------------------------------------------
 const SB = "https://test-project.supabase.co";
+// Simulated weather services (shapes from Open-Meteo and api.weather.gov docs).
+async function mockWeather(ctx) {
+  const calls = [];
+  const send = (route, data) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(data) });
+  await ctx.route("https://geocoding-api.open-meteo.com/**", (r) => (calls.push(r.request().url()), send(r, { results: [
+    { name: "Grand Junction", latitude: 39.06387, longitude: -108.55065, country_code: "US", admin1: "Colorado", timezone: "America/Denver" },
+    { name: "Grand Junction", latitude: 35.0487, longitude: -89.1878, country_code: "US", admin1: "Tennessee", timezone: "America/Chicago" },
+  ] })));
+  await ctx.route("https://api.open-meteo.com/**", (r) => {
+    calls.push(r.request().url());
+    const today = new Date();
+    const day = (n) => { const d = new Date(today.getTime() + n * 86_400_000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    return send(r, { current: { temperature_2m: 38.6, apparent_temperature: 33.2, weather_code: 2, wind_speed_10m: 6.1, is_day: 1 }, daily: { time: [0, 1, 2, 3, 4].map(day), weather_code: [2, 71, 3, 0, 1], temperature_2m_max: [47.8, 40.1, 44, 50, 52], temperature_2m_min: [24.3, 22, 25, 27, 28], precipitation_probability_max: [5, 60, 10, 0, 0] } });
+  });
+  await ctx.route("https://api.weather.gov/**", (r) => (calls.push(r.request().url()), send(r, { type: "FeatureCollection", features: [
+    { properties: { id: "urn:test:1", event: "Winter Storm Warning", headline: "Winter Storm Warning until Sunday 5 AM", severity: "Severe", ends: new Date(Date.now() + 20 * 3_600_000).toISOString(), areaDesc: "Grand Valley; Grand Mesa", description: "Heavy snow expected. Total accumulations of 6 to 10 inches.", instruction: "Travel could be very difficult.", status: "Actual", messageType: "Alert" } },
+  ] })));
+  return calls;
+}
 const SYNC_TABLES = ["terms", "grading_scales", "courses", "grade_categories", "grade_items", "past_courses", "day_types", "schedule_blocks", "schedule_exceptions", "assignments", "emails", "health_daily", "weight_entries"];
+const NEWS_ROWS = (now) => [
+  { id: "a".repeat(32), region_key: "world", provider: "guardian", category: "world", title: "Trade summit: leaders meet in Geneva – live updates", summary: "Leaders meet for a second day.", source_name: "The Guardian", url: "https://www.theguardian.com/world/live/summit", image_url: null, published_at: new Date(now - 10 * 60_000).toISOString(), is_live: true },
+  { id: "b".repeat(32), region_key: "world", provider: "rss", category: "world", title: "Leaders meet for second day of trade summit in Geneva", summary: "Talks continue on trade.", source_name: "BBC News", url: "https://www.bbc.co.uk/news/articles/summit", image_url: null, published_at: new Date(now - 20 * 60_000).toISOString(), is_live: false },
+  { id: "c".repeat(32), region_key: "world", provider: "guardian", category: "technology", title: "New chip announced by chipmaker", summary: null, source_name: "The Guardian", url: "https://www.theguardian.com/technology/chip", image_url: null, published_at: new Date(now - 3 * 3_600_000).toISOString(), is_live: false },
+];
 async function cloudChecks() {
   const USER = { id: "8b0f7a52-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "remy@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
   const calls = [];
@@ -120,6 +144,9 @@ async function cloudChecks() {
       healthKeys.splice(0, healthKeys.length, { id: "hk1", created_at: new Date().toISOString(), last_used_at: null });
       return json(200, { ok: true, key: "lth_TESTKEY0000000000000000000000000000000000000", url: "https://test.supabase.co/functions/v1/health-ingest" });
     }
+    if (u.pathname === "/functions/v1/news-refresh") return json(200, { ok: true, results: [{ region: "world", status: "refreshed", saved: 3, problems: [] }] });
+    if (u.pathname === "/rest/v1/news_articles") return json(200, NEWS_ROWS(Date.now()));
+    if (u.pathname === "/rest/v1/news_regions") return json(200, [{ region_key: "world", label: "World", last_refreshed_at: new Date().toISOString(), last_error: "NPR: HTTP 503" }]);
     if (u.pathname === "/functions/v1/email-sync") return json(200, { ok: true, added: 0, updated: 0, expired: 0 });
     if (u.pathname === "/functions/v1/email-summarize")
       return json(200, { analysis: { category: "school", summary: "Coach moved practice to 4 PM Thursday.", hasDeadline: false, deadlineOn: null, needsReply: false, isSchool: true, importance: 2, source: "ai" } });
@@ -292,6 +319,28 @@ async function cloudChecks() {
   await c.goto(CURL);
   await settle(c, 1000);
   ok((await c.locator("main").innerText()).includes("9,120"), "Home: steps today from Apple Health");
+
+  // News, signed in: refresh is requested, stories grouped and labeled, every card links out.
+  await c.goto(`${CURL}#/news`);
+  await settle(c, 2000);
+  ok(calls.some((x) => x.path === "/functions/v1/news-refresh" && x.auth === "Bearer test-access"), "News: opening asks the server to refresh (as the user)");
+  const nm = await c.locator("main").innerText();
+  ok(nm.includes("Reported by 2 outlets") && nm.includes("Breaking"), "News: same story from two outlets is grouped; live + 2 outlets in the hour = Breaking");
+  ok(nm.includes("Some sources didn't answer: NPR: HTTP 503"), "News: says when a source didn't answer");
+  const links = await c.locator("main article a[href^='https://'], main li a[href^='https://']").evaluateAll((els) => els.map((e) => [e.getAttribute("href"), e.getAttribute("target"), e.getAttribute("rel")]));
+  ok(links.length >= 3 && links.every(([, t, r]) => t === "_blank" && r?.includes("noopener")), "News: every story links to its original, opening safely in a new tab");
+  await c.getByRole("button", { name: "Technology" }).click();
+  ok((await c.locator("main").innerText()).includes("New chip announced") && !(await c.locator("main").innerText()).includes("Geneva"), "News: section filter");
+  await c.getByRole("button", { name: "Top stories" }).click();
+  await c.getByRole("button", { name: "Hide The Guardian" }).first().click();
+  await settle(c, 300);
+  ok(!(await c.locator("main").innerText()).includes("Reported by 2 outlets"), "News: hiding an outlet removes its stories");
+  ok((await c.locator("main").innerText()).includes("Leaders meet for second day"), "News: the other outlet's version of the story stays");
+  ok(!(await c.locator("main").innerText()).includes("Breaking"), "News: labels are recalculated from the outlets still shown");
+  const nv = await axe(c);
+  ok(nv.length === 0, `News page passes axe${nv.length ? ": " + nv.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+  if (nv.length) for (const x of nv) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+  if (SHOTS) await c.screenshot({ path: `${SHOTS}/phone-news-cloud.png`, fullPage: true });
 
   await c.goto(`${CURL}#/account`);
   await settle(c, 500);
@@ -772,6 +821,43 @@ try {
     await m.goto(URL);
     await settle(m, 800);
     ok((await m.locator("main").innerText()).includes("6,400"), "Home: steps today from typed entry");
+    await ctx.close();
+  }
+
+  console.log("\nNews (no cloud): city, weather, alerts");
+  {
+    const ctx = await browser.newContext({ ...devices["iPhone 15"] });
+    const wcalls = await mockWeather(ctx);
+    const m = await ctx.newPage();
+    watch(m, "news");
+    await m.goto(`${URL}#/news`);
+    await settle(m);
+    ok(await m.getByText("Choose your city").first().isVisible() && (await m.getByRole("button", { name: "Set up cloud sync to see headlines" }).isVisible()), "asks for a city; explains headlines need cloud sync");
+    await m.getByRole("textbox", { name: "City" }).fill("Grand Junction");
+    await m.getByRole("button", { name: "Search" }).click();
+    await settle(m, 400);
+    await m.getByRole("button", { name: "Grand Junction, Colorado" }).click();
+    await settle(m, 1200);
+    const main = await m.locator("main").innerText();
+    ok(main.includes("Grand Junction, Colorado") && main.includes("39°") && main.includes("Partly cloudy") && main.includes("Feels like 33°"), "weather for the chosen city in °F");
+    ok(main.includes("Winter Storm Warning") && main.includes("National Weather Service"), "official weather alert shown with its source");
+    ok(wcalls.some((u) => u.includes("api.weather.gov/alerts/active?point=39.0639,-108.5506")), "alerts are looked up for the city's location");
+    await m.getByRole("button", { name: "Details" }).click();
+    ok(await m.getByText("Travel could be very difficult.").isVisible(), "alert details and instructions");
+    const va = await axe(m);
+    ok(va.length === 0, `News (weather) passes axe${va.length ? ": " + va.map((x) => `${x.id} (${x.nodes.length})`).join(", ") : ""}`);
+    if (va.length) for (const x of va) for (const n of x.nodes.slice(0, 3)) console.log(`      ${x.id}: ${n.target.join(" ")} — ${n.failureSummary?.split("\n")[1]?.trim()}`);
+    if (SHOTS) await m.screenshot({ path: `${SHOTS}/phone-news.png`, fullPage: true });
+    await m.getByRole("button", { name: "News settings" }).click();
+    await m.getByRole("dialog").getByRole("radio", { name: "°C" }).click();
+    await m.keyboard.press("Escape");
+    await settle(m, 1000);
+    ok(wcalls.some((u) => u.includes("temperature_unit=celsius")), "switching to °C reloads the forecast in Celsius");
+    await m.goto(URL);
+    await settle(m, 1200);
+    const home = await m.locator("main").innerText();
+    ok(home.includes("Winter Storm Warning") && home.includes("Weather warning"), "Home: weather warning at the top of Important");
+    ok(/Grand Junction: \d+°/.test(home), "Home: briefing starts with the weather");
     await ctx.close();
   }
 

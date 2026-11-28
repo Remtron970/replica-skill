@@ -17,7 +17,8 @@ and desktop browsers.
 | 5. Schedule & assignments | ✅ Complete |
 | 6. Email recap | ✅ Complete — Gmail and AI waiting for setup; Paste works now |
 | 7. Health | ✅ Complete — Apple Health Shortcut waiting for setup; manual entry works now |
-| 8–12 | Not started |
+| 8. News & weather | ✅ Complete — weather and alerts work now; headlines waiting for the news function |
+| 9–12 | Not started |
 
 ## Documentation
 - [Architecture](docs/ARCHITECTURE.md) — stack, system design, security, offline, AI
@@ -26,7 +27,7 @@ and desktop browsers.
 - [Design system](docs/DESIGN_SYSTEM.md) — brand, colors, type, motion, components
 - [Roadmap](docs/ROADMAP.md) — the 12 phases and their acceptance criteria
 - [Setup checklist](docs/SETUP_CHECKLIST.md) — accounts and keys, by phase
-- [Set up cloud sync (Supabase)](docs/SETUP_SUPABASE.md) · [Connect your school](docs/SETUP_SCHOOL.md) · [Email recap](docs/SETUP_EMAIL.md) · [Health from iPhone](docs/SETUP_HEALTH.md) · [Deploy & install on iPhone](docs/DEPLOY.md)
+- [Set up cloud sync (Supabase)](docs/SETUP_SUPABASE.md) · [Connect your school](docs/SETUP_SCHOOL.md) · [Email recap](docs/SETUP_EMAIL.md) · [Health from iPhone](docs/SETUP_HEALTH.md) · [News & weather](docs/SETUP_NEWS.md) · [Deploy & install on iPhone](docs/DEPLOY.md)
 - [Progress log](PROGRESS.md)
 
 ## Run the preview app

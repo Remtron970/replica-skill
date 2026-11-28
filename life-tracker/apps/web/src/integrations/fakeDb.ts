@@ -5,15 +5,19 @@ export function fakeDb(extra: Record<string, Record<string, unknown>[]> = {}) {
     let rows = () => tables[t];
     const filters: ((r: Record<string, unknown>) => boolean)[] = [];
     let pendingUpdate: Record<string, unknown> | null = null;
+    let pendingDelete = false;
     const apply = () => {
       const hit = rows().filter((r) => filters.every((f) => f(r)));
       if (pendingUpdate) hit.forEach((r) => Object.assign(r, pendingUpdate));
+      if (pendingDelete) tables[t] = tables[t].filter((r) => !hit.includes(r));
       return hit;
     };
     const q = {
       select: () => q,
       eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), q),
       in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), q),
+      lt: (k: string, v: string) => (filters.push((r) => String(r[k]) < v), q),
+      delete: () => ((pendingDelete = true), q),
       single: async () => ({ data: apply()[0] ?? null, error: apply()[0] ? null : { message: "none" } }),
       insert: (row: Record<string, unknown>) => {
         const r = { id: `${t}-${tables[t].length + 1}`, ...row };
@@ -23,7 +27,7 @@ export function fakeDb(extra: Record<string, Record<string, unknown>[]> = {}) {
       },
       upsert: async (input: Record<string, unknown> | Record<string, unknown>[]) => {
         for (const row of Array.isArray(input) ? input : [input]) {
-          const k = t === "integration_tokens" ? "integration_id" : "id";
+          const k = t === "integration_tokens" ? "integration_id" : t === "news_regions" ? "region_key" : "id";
           const cur = tables[t].find((r) => r[k] === row[k]);
           if (cur) Object.assign(cur, row);
           else tables[t].push({ ...row });

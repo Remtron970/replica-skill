@@ -68,6 +68,16 @@ export interface NewsItem {
   breaking: boolean;
 }
 
+export interface HomeWeather {
+  place: string;
+  temp: number;
+  label: string;
+  hi: number | null;
+  lo: number | null;
+  /** Active official alerts (National Weather Service). */
+  alerts: { id: string; event: string; area: string; isWarning: boolean; ends: string | null }[];
+}
+
 export interface HomeData {
   mode: "live" | "demo";
   connected: Record<SourceId, boolean>;
@@ -79,6 +89,7 @@ export interface HomeData {
   gradeUpdates: GradeUpdate[];
   news: NewsItem[];
   steps?: { today: number | null; week: number };
+  weather?: HomeWeather;
   tasks?: { done: number; total: number };
   /** GPA and average, computed with the user's own grading settings. */
   grades?: { gpa: number | null; average: number | null };
@@ -102,6 +113,9 @@ export interface LiveInputs {
   emails?: EmailRecord[];
   /** Steps from Health (Apple Health via the Shortcut, or typed in). */
   steps?: { today: number | null; week: number; hasData: boolean };
+  /** Top stories from News (already grouped), newest/most-reported first. */
+  news?: NewsItem[];
+  weather?: HomeWeather;
 }
 
 /** Due time for an assignment (date-only due dates count as 11:59 PM that day). */
@@ -132,7 +146,7 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     : [];
   return {
     mode: "live",
-    connected: { ...NONE, grades: hasGrades, school: hasSchool, email: mail.length > 0, health: !!input?.steps?.hasData },
+    connected: { ...NONE, grades: hasGrades, school: hasSchool, email: mail.length > 0, health: !!input?.steps?.hasData, news: (input?.news?.length ?? 0) > 0 },
     courses: hasGrades ? input!.summaries.filter((s) => s.result.percent !== null).map((s) => ({ id: s.course.id, name: s.course.name, teacher: s.course.teacher, percent: s.result.percent as number, credits: s.course.credits })) : [],
     schedule: [],
     scheduleFor: hasSchedule ? input!.schedule!.forDay : undefined,
@@ -152,7 +166,8 @@ export function liveData(input?: LiveInputs, now = new Date()): HomeData {
     })),
     events: [],
     gradeUpdates,
-    news: [],
+    news: input?.news ?? [],
+    weather: input?.weather,
     steps: input?.steps?.hasData ? { today: input.steps.today, week: input.steps.week } : undefined,
     grades: hasGrades ? { gpa: input!.gpa, average: input!.average } : undefined,
   };
@@ -261,7 +276,7 @@ export function computeStats(d: HomeData, now: Date): Stats {
   };
 }
 
-export type ImportantKind = "overdue" | "due" | "email" | "grade" | "news" | "event";
+export type ImportantKind = "weather" | "overdue" | "due" | "email" | "grade" | "news" | "event";
 export interface ImportantItem {
   id: string;
   kind: ImportantKind;
@@ -289,6 +304,7 @@ const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", min
 export function importantItems(d: HomeData, now: Date, limit = 6): ImportantItem[] {
   const t = now.getTime();
   const items: (ImportantItem & { rank: number })[] = [];
+  for (const w of d.weather?.alerts ?? []) if (w.isWarning) items.push({ id: w.id, kind: "weather", title: w.event, detail: [w.area.split(";")[0], w.ends ? `until ${relDay(new Date(w.ends), now)} ${time(new Date(w.ends))}` : ""].filter(Boolean).join(" · "), at: now, to: "/news", rank: -1 });
   for (const a of d.assignments) {
     if (a.done) continue;
     const due = a.dueAt.getTime();
@@ -394,9 +410,16 @@ export function buildBriefing(d: HomeData, now: Date): Briefing {
     sections.push({ title: "Activity", lines: [d.steps.today === null ? "No steps recorded today yet" : `${d.steps.today.toLocaleString()} steps today`, `${d.steps.week.toLocaleString()} steps this week`] });
   }
 
+  if (d.weather) {
+    const w = d.weather;
+    summary.unshift(`${w.place}: ${w.temp}° and ${w.label.toLowerCase()}${w.hi !== null ? `, high ${w.hi}°` : ""}.`);
+    sections.push({ title: "Weather", lines: [`${w.temp}°, ${w.label}${w.hi !== null && w.lo !== null ? ` · high ${w.hi}°, low ${w.lo}°` : ""}`, ...w.alerts.map((a) => `${a.event} (${a.area.split(";")[0]})`)] });
+    w.alerts.filter((a) => a.isWarning).forEach((a) => priorities.unshift(`Check the ${a.event} before heading out`));
+  }
+
   if (d.connected.news) {
     const top = [...d.news].sort((a, b) => Number(b.breaking) - Number(a.breaking) || b.at.getTime() - a.at.getTime());
-    if (top.length) sections.push({ title: "News", lines: top.map((n) => `${n.breaking ? "Developing: " : ""}${n.headline} (${n.source})`) });
+    if (top.length) sections.push({ title: "News", lines: top.slice(0, 5).map((n) => `${n.breaking ? "Breaking: " : ""}${n.headline} (${n.source})`) });
   }
 
   return {

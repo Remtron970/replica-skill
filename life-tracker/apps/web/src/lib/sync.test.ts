@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ACADEMIC, DEFAULT_DASHBOARD, DEFAULT_PREFS, normalizeAcademic, normalizeDashboard, normalizeHealthSettings, parsePrefs, pickWinner, prefsToRow, rowToPrefs, type Prefs } from "./sync";
+import { DEFAULT_ACADEMIC, DEFAULT_DASHBOARD, DEFAULT_PREFS, normalizeAcademic, normalizeDashboard, normalizeHealthSettings, normalizeNewsSettings, parsePrefs, pickWinner, prefsToRow, rowToPrefs, type Prefs } from "./sync";
 
 describe("parsePrefs", () => {
   it("returns defaults for missing or broken data", () => {
@@ -22,6 +22,7 @@ describe("parsePrefs", () => {
       schedule: { schoolDays: [1, 2, 3, 4, 5], fixed: { "1": "t-all" }, rotation: ["t-a", "t-b"], anchorDate: "2026-11-24", anchorIndex: 0, termStart: null, termEnd: "2027-06-10" },
       email: { ai: false, retentionDays: 14 },
       health: { units: "metric", stepGoal: 10000, trackWeight: true },
+      news: { location: { label: "Grand Junction, Colorado", lat: 39.0639, lon: -108.5506, country: "US", regionKey: "us-colorado-grand-junction", query: '"Grand Junction" Colorado', timezone: "America/Denver" }, tempUnit: "c", hidden: ["sports"], muted: ["Example Outlet"] },
       updatedAt: 1_700_000_000_000,
     };
     expect(parsePrefs(JSON.stringify(p))).toEqual(p);
@@ -42,6 +43,13 @@ describe("normalizeHealthSettings", () => {
     expect(normalizeHealthSettings(undefined)).toEqual({ units: "imperial", stepGoal: 8000, trackWeight: false });
     expect(normalizeHealthSettings({ units: "metric", stepGoal: 3, trackWeight: "yes" })).toEqual({ units: "metric", stepGoal: 8000, trackWeight: false });
     expect(normalizeHealthSettings({ stepGoal: "6500.4" }).stepGoal).toBe(6500);
+  });
+});
+
+describe("normalizeNewsSettings", () => {
+  it("drops a malformed city, unknown categories and duplicate muted outlets", () => {
+    expect(normalizeNewsSettings(undefined)).toEqual({ location: null, tempUnit: "f", hidden: [], muted: [] });
+    expect(normalizeNewsSettings({ location: { label: "X", lat: 200, lon: 0, regionKey: "x-y", query: "x" }, hidden: ["sports", "gossip", "sports"], muted: ["A", " A ", "", 3] })).toEqual({ location: null, tempUnit: "f", hidden: ["sports"], muted: ["A"] });
   });
 });
 

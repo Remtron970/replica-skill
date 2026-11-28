@@ -115,22 +115,22 @@ tap. **Manual entry** always works.
 |---|---|---|
 | **The Guardian Open Platform** | World, tech, science, business, politics, sports; good "live"/developing flags | Free developer key |
 | **GNews** (or NewsData.io) | Broad headline coverage + local search by city/region | Free tier key (limited daily requests) |
-| **National Weather Service API** (US) | Official weather alerts for your area | None |
-| **Open-Meteo** | Weather forecast for the Home card | None |
-| Curated RSS (AP, BBC, NPR, local outlets you choose) | Extra reputable coverage | None |
+| **National Weather Service API** (US) | Official weather alerts for your area (called from the app) | None |
+| **Open-Meteo** | Forecast and city search (called from the app) | None |
+| RSS: BBC News world, NPR, Google News search for your city | Coverage that works with no keys | None |
+
+Built in Phase 8 — setup: [SETUP_NEWS.md](SETUP_NEWS.md).
 
 - Articles are cached **server-side per region**, refreshed every 30 min, so
   free-tier limits aren't exhausted.
 - Every article shows headline, summary, **source**, publish time and a link to
   the original.
-- **"Developing" vs "Reported":** we label a story *Developing* when the source
-  marks it live/breaking or only one outlet has it. We do **not** claim to
-  verify facts; the app says "Reported by 3 sources" rather than "confirmed".
-- **Breaking alerts** fire only when a story is flagged breaking by a source
-  *and* appears in 2+ reputable outlets within an hour, capped by your
-  notification settings.
-- **Location:** you type a city or ZIP (or optionally allow one-time GPS). We
-  store only the city/region, never a precise location history.
+- **Labels:** *Developing* when the outlet marks it live/breaking; *Breaking*
+  when it's developing **and** 2+ outlets reported it within the hour (alerts
+  for these come in Phase 11). We do **not** claim to verify facts; the app says
+  "Reported by 3 outlets" rather than "confirmed".
+- **Location:** you search for a city. We store only the city, never a precise
+  location history.
 
 ---
 

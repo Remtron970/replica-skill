@@ -18,7 +18,7 @@ it; I'll give step-by-step instructions at that point.
 | Phase 6 | **Anthropic API key** (console.anthropic.com) | Pay per use; set a monthly spend limit | Email summaries, AI assistant, briefings |
 | Phase 7 | iPhone **Shortcuts** app | Free | Sending Apple Health data to the app |
 | Phase 7 (optional) | Mac with **Xcode** + **Apple Developer Program** | $99/year | Native iOS app with direct HealthKit / Apple Calendar |
-| Phase 8 | **Guardian Open Platform** key, **GNews** key | Free tiers | News feeds |
+| Phase 8 | Optional: **Guardian Open Platform** key, **GNews** key | Free tiers | More headlines (free feeds and weather work without them) |
 | Phase 11 | VAPID key pair (I generate it) | Free | Push notifications |
 
 Never paste secret keys into chat. I'll show you where to store each one

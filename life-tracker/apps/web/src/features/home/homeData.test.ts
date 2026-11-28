@@ -78,3 +78,31 @@ describe("demo mode", () => {
     expect(buildBriefing(demoData(sat), sat).summary).toMatch(/^No classes today\./);
   });
 });
+
+describe("live mode with news and weather", () => {
+  const now = new Date(2026, 10, 28, 7, 30);
+  const d = liveData(
+    {
+      summaries: [],
+      items: [],
+      gpa: null,
+      average: null,
+      news: [
+        { id: "n1", headline: "Council approves trail", source: "The Daily Sentinel", at: new Date(2026, 10, 28, 6), breaking: false },
+        { id: "n2", headline: "Summit talks", source: "BBC News +2", at: new Date(2026, 10, 28, 7), breaking: true },
+      ],
+      weather: { place: "Grand Junction", temp: 28, label: "Snow", hi: 34, lo: 20, alerts: [{ id: "w1", event: "Winter Storm Warning", area: "Grand Valley; Grand Mesa", isWarning: true, ends: new Date(2026, 10, 29, 5).toISOString() }] },
+    },
+    now,
+  );
+  it("weather leads the briefing; warnings come first in Important and priorities", () => {
+    const b = buildBriefing(d, now);
+    expect(b.summary.startsWith("Grand Junction: 28° and snow, high 34°.")).toBe(true);
+    expect(b.sections.find((s) => s.title === "Weather")?.lines).toEqual(["28°, Snow · high 34°, low 20°", "Winter Storm Warning (Grand Valley)"]);
+    expect(b.priorities[0]).toBe("Check the Winter Storm Warning before heading out");
+    const imp = importantItems(d, now);
+    expect(imp[0]).toMatchObject({ kind: "weather", title: "Winter Storm Warning", to: "/news" });
+    expect(imp.some((i) => i.kind === "news" && i.title === "Summit talks")).toBe(true);
+    expect(b.sections.find((s) => s.title === "News")?.lines).toContain("Breaking: Summit talks (BBC News +2)");
+  });
+});

@@ -64,6 +64,40 @@ export function normalizeHealthSettings(raw: unknown): HealthSettings {
   };
 }
 
+/** News & weather settings (synced). Only the city is stored, never a precise location. */
+export interface NewsLocation {
+  label: string;
+  lat: number;
+  lon: number;
+  country: string;
+  regionKey: string;
+  query: string;
+  timezone: string | null;
+}
+export interface NewsSettings {
+  location: NewsLocation | null;
+  tempUnit: "f" | "c";
+  hidden: NewsCategory[];
+  muted: string[];
+}
+export const NEWS_CATEGORIES = ["world", "us", "politics", "business", "technology", "science", "health", "sports", "entertainment", "local"] as const;
+export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
+export const DEFAULT_NEWS_SETTINGS: NewsSettings = { location: null, tempUnit: "f", hidden: [], muted: [] };
+export function normalizeNewsSettings(raw: unknown): NewsSettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<NewsSettings>;
+  const l = r.location as Partial<NewsLocation> | null | undefined;
+  const location =
+    l && typeof l.label === "string" && Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat!) <= 90 && Math.abs(l.lon!) <= 180 && typeof l.regionKey === "string" && /^[a-z0-9-]{2,80}$/.test(l.regionKey) && typeof l.query === "string"
+      ? { label: l.label.slice(0, 120), lat: l.lat!, lon: l.lon!, country: typeof l.country === "string" ? l.country.slice(0, 2).toUpperCase() : "", regionKey: l.regionKey, query: l.query.slice(0, 120), timezone: typeof l.timezone === "string" ? l.timezone : null }
+      : null;
+  return {
+    location,
+    tempUnit: r.tempUnit === "c" ? "c" : "f",
+    hidden: Array.isArray(r.hidden) ? [...new Set(r.hidden.filter((c): c is NewsCategory => NEWS_CATEGORIES.includes(c as NewsCategory)))] : [],
+    muted: Array.isArray(r.muted) ? [...new Set(r.muted.filter((m): m is string => typeof m === "string" && m.trim().length > 0).map((m) => m.trim().slice(0, 100)))].slice(0, 50) : [],
+  };
+}
+
 export interface Prefs {
   name: string;
   theme: ThemePref;
@@ -74,6 +108,7 @@ export interface Prefs {
   schedule: ScheduleSettings;
   email: EmailSettings;
   health: HealthSettings;
+  news: NewsSettings;
   /** ms since epoch of the last change on any device; 0 = never changed. */
   updatedAt: number;
 }
@@ -86,7 +121,7 @@ export const DASHBOARD_SECTIONS: { id: DashboardSectionId; label: string }[] = [
   { id: "important", label: "Important" },
 ];
 export const DEFAULT_DASHBOARD: DashboardItem[] = DASHBOARD_SECTIONS.map((s) => ({ id: s.id, visible: true }));
-export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, email: DEFAULT_EMAIL_SETTINGS, health: DEFAULT_HEALTH_SETTINGS, updatedAt: 0 };
+export const DEFAULT_PREFS: Prefs = { name: "", theme: "system", pins: DEFAULT_PINS, dashboard: DEFAULT_DASHBOARD, demo: false, academic: DEFAULT_ACADEMIC, schedule: DEFAULT_SCHEDULE_SETTINGS, email: DEFAULT_EMAIL_SETTINGS, health: DEFAULT_HEALTH_SETTINGS, news: DEFAULT_NEWS_SETTINGS, updatedAt: 0 };
 
 /** Keep known sections in the saved order, drop junk/duplicates, append any new sections. */
 export function normalizeDashboard(raw: unknown): DashboardItem[] {
@@ -123,6 +158,7 @@ export function parsePrefs(json: string | null): Prefs {
       schedule: normalizeScheduleSettings(raw.schedule),
       email: normalizeEmailSettings(raw.email),
       health: normalizeHealthSettings(raw.health),
+      news: normalizeNewsSettings(raw.news),
       updatedAt: typeof raw.updatedAt === "number" && raw.updatedAt > 0 ? raw.updatedAt : 0,
     };
   } catch {
@@ -143,6 +179,7 @@ export interface ProfileRow {
   schedule_settings?: unknown;
   email_settings?: unknown;
   health_settings?: unknown;
+  news_settings?: unknown;
   prefs_updated_at: string;
 }
 
@@ -158,6 +195,7 @@ export function rowToPrefs(row: ProfileRow): Prefs {
     schedule: normalizeScheduleSettings(row.schedule_settings),
     email: normalizeEmailSettings(row.email_settings),
     health: normalizeHealthSettings(row.health_settings),
+    news: normalizeNewsSettings(row.news_settings),
     updatedAt: Number.isFinite(t) && t > 0 ? t : 0,
   };
 }
@@ -174,6 +212,7 @@ export function prefsToRow(p: Prefs, timezone: string): Omit<ProfileRow, "id"> {
     schedule_settings: p.schedule,
     email_settings: p.email,
     health_settings: p.health,
+    news_settings: p.news,
     prefs_updated_at: new Date(p.updatedAt || 0).toISOString(),
   };
 }

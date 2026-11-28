@@ -258,4 +258,7 @@ life-tracker/
 | 2026-11-27 | Server refreshes stamp existing rows 1 ms after their own time | Devices still download the change, but a user's not-yet-uploaded edit (done, dismissed) stays newer and wins |
 | 2026-11-27 | Apple Health through an iPhone Shortcut posting to `health-ingest` with a personal key (hash stored, shown once) | A web app can't read HealthKit and the user has no Mac; the key can only add numbers, never read |
 | 2026-11-27 | Health: Shortcut values win per metric over typed values for the same day; missing days are empty, not zero; weight off by default | Avoids double counting, keeps charts honest, and keeps a sensitive metric opt-in |
+| 2026-11-28 | Weather and NWS alerts fetched directly by the app; headlines through `news-refresh` into a shared cache | Weather needs no key and works signed-out; news keys stay server-side and each place refreshes at most every 30 min for everyone |
+| 2026-11-28 | Free RSS (BBC, NPR, Google News city search) always on; Guardian and GNews keys optional | News works as soon as the function is deployed; keys add coverage |
+| 2026-11-28 | Story grouping and Breaking/Developing labels computed in the app from the cached articles | Labels follow what the user actually sees (e.g. after hiding an outlet) and need no extra tables |
 | 2026-11-27 | PowerSchool / Infinite Campus via copy-paste import | No student-authorized API exists; avoids asking for school passwords |

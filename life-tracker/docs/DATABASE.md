@@ -5,8 +5,8 @@
 > `grade_categories`, `grade_items`, `past_courses`, `integrations`,
 > `integration_tokens`, `sync_runs`, `day_types`, `schedule_blocks`,
 > `schedule_exceptions`, `assignments`, `emails`, `health_daily`, `weight_entries`,
-> `health_ingest_tokens` (and `profiles.schedule_settings`, `profiles.email_settings`,
-> `profiles.health_settings`). The rest of this document is the plan for
+> `health_ingest_tokens`, `news_regions`, `news_articles` (and `profiles.schedule_settings`, `profiles.email_settings`,
+> `profiles.health_settings`, `profiles.news_settings`). The rest of this document is the plan for
 > later phases.
 >
 > **Sync model** (all synced tables): `id` is created on the device so records
@@ -89,8 +89,9 @@ unweighted = Σ(points×credits)/Σcredits; weighted adds `weight_bonus`
 ## News
 | Table | Key columns |
 |---|---|
-| `news_articles` (shared, read-only for users) | id, provider, region_key (`world` or `us-ca-sacramento`), category, title, summary, source_name, url, image_url, published_at, is_breaking, is_developing, cluster_id, source_count |
-| `news_prefs` | user_id, categories text[], muted_sources text[], local_enabled |
+| `news_regions` (shared, read-only for users) | region_key (`world` or e.g. `us-colorado-grand-junction`), label, query, last_refreshed_at, last_error, refreshing_since |
+| `news_articles` (shared, read-only for users) | id (hash of the URL), region_key, provider (`guardian/gnews/rss`), category, title, summary, source_name, url (https only), image_url, published_at, is_live — kept 3 days. "Reported by N outlets" and Breaking are worked out in the app. |
+| `profiles.news_settings` | city (label, lat/lon, region key, search words), °F/°C, hidden sections, hidden outlets |
 
 ## Productivity
 | Table | Key columns |
